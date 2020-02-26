@@ -1,26 +1,24 @@
-## Running example
+## Running wasm-exeunit runtime without supervisor
 
-Download and build wasmtime example repository:
+### Preparing environment
 
-https://github.com/kubkon/rust-wasi-tutorial
+* Copy content of workdir directory to location, where you want to run runtime.
+* Change wasm package location in tasks/agreement.json file.
 
+### Running commands
 
-Create input and output directories:
-```aidl
-mkdir workdir
-cd workdir
-mkdir input
-mkdir output
+Deploy:
+```
+RUST_LOG=info cargo run --bin wasmtime-exeunit -- --cachedir workdir/cache --workdir workdir/tasks --agreement agreement.json deploy
 ```
 
-Create input file that will be copied by wasm executable:
-```aidl
-echo "Important Content" >> workdin/input/input.txt
+Start
+```
+RUST_LOG=info cargo run --bin wasmtime-exeunit -- --cachedir workdir/cache --workdir workdir/tasks --agreement agreement.json start
 ```
 
-Run example application:
-```aidl
-cargo run --example run-simple-binary  -- rust-wasi-tutorial/target/wasm32-wasi/debug/main.wasm workdir/input workdir/output
+Run:
 ```
-
-Check output file in workdir/output/output.txt
+RUST_LOG=info cargo run --bin wasmtime-exeunit -- --cachedir workdir/cache --workdir workdir/tasks --agreement agreement.json run --entrypoint rust-wasi-tutorial input/input.txt output/output.txt
+RUST_LOG=info cargo run --bin wasmtime-exeunit -- --cachedir workdir/cache --workdir workdir/tasks --agreement agreement.json run --entrypoint hello-world
+```
