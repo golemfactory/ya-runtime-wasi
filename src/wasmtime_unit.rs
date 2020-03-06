@@ -5,7 +5,7 @@ use wasi_common::preopen_dir;
 use wasmtime::*;
 use wasmtime_wasi::old::snapshot_0::create_wasi_instance as create_wasi_instance_snapshot_0;
 
-use anyhow::{bail, Context, Error, Result};
+use anyhow::{bail, Context, Result};
 use log::info;
 use std::collections::HashMap;
 use std::fs::File;
@@ -111,12 +111,10 @@ impl Wasmtime {
                     .with_context(|| format!("WASM instance creation failed."))?;
                 Ok(instance)
             }
-            None => {
-                return Err(Error::msg(format!(
-                    "Module {} is not loaded. Did you forgot to run deploy step.",
-                    module_name
-                )))
-            }
+            None => bail!(
+                "Module {} is not loaded. Did you forgot to run deploy step.",
+                module_name
+            ),
         }
     }
 

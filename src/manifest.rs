@@ -1,4 +1,4 @@
-use anyhow::{Context, Error, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs::{File, OpenOptions};
 use std::io::Read;
@@ -85,10 +85,7 @@ impl WasmImage {
             .find(|entry| entry.id == entrypoint_id)
             .map(|entry| entry.clone());
 
-        Ok(entrypoint.ok_or(Error::msg(format!(
-            "Entrypoint {} not found.",
-            entrypoint_id
-        )))?)
+        Ok(entrypoint.ok_or(anyhow!("Entrypoint {} not found.", entrypoint_id))?)
     }
 
     pub fn load_binary(&mut self, entrypoint: &EntryPoint) -> Result<Vec<u8>> {

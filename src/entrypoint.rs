@@ -1,4 +1,4 @@
-use anyhow::{Context, Error, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -179,23 +179,12 @@ fn validate_path(path: &str) -> Result<()> {
     for component in path.components() {
         match component {
             Component::RootDir | Component::Prefix { .. } => {
-                return Err(Error::msg(format!(
-                    "Expected relative path instead of [{}].",
-                    path.display()
-                )));
+                bail!("Expected relative path instead of [{}].", path.display())
             }
             Component::ParentDir { .. } => {
-                return Err(Error::msg(format!(
-                    "Path [{}] contains illegal '..' component.",
-                    path.display()
-                )))
+                bail!("Path [{}] contains illegal '..' component.", path.display())
             }
-            Component::CurDir => {
-                return Err(Error::msg(format!(
-                    "Path [{}] contains illegal '.' component.",
-                    path.display()
-                )))
-            }
+            Component::CurDir => bail!("Path [{}] contains illegal '.' component.", path.display()),
             _ => (),
         }
     }
@@ -231,15 +220,15 @@ fn load_package_url(workdir: &Path, agreement_path: &Path) -> Result<String> {
 
     let package_value = json
         .pointer("/golem.srv.comp.wasm.task_package")
-        .ok_or(Error::msg(format!(
+        .ok_or(anyhow!(
             "Agreement field 'golem.srv.comp.wasm.task_package' doesn't exist."
-        )))?;
+        ))?;
 
     let package = package_value
         .as_str()
-        .ok_or(Error::msg(format!(
+        .ok_or(anyhow!(
             "Agreement field 'golem.srv.comp.wasm.task_package' is not string type."
-        )))?
+        ))?
         .to_owned();
     return Ok(package);
 }
