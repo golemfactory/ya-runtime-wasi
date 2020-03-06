@@ -5,8 +5,6 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-exe-unit-tools = { path="../exe-unit-tools" }
-
 anyhow = "1.0.19"
 env_logger = "0.7"
 log = "0.4.8"

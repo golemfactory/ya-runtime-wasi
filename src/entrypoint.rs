@@ -10,8 +10,6 @@ use crate::wasmtime_unit::Wasmtime;
 use std::fs::File;
 use std::io::BufReader;
 
-use exe_unit_tools::download_image_http;
-
 #[derive(StructOpt)]
 pub enum Commands {
     Deploy {},
@@ -61,19 +59,22 @@ impl ExeUnitMain {
     }
 
     fn deploy(workdir: &Path, cachedir: &Path, agreement_path: &Path) -> Result<()> {
-        let image_url = load_package_url(workdir, agreement_path).with_context(|| {
+        let image_url: String = load_package_url(workdir, agreement_path).with_context(|| {
             format!(
                 "Failed to parse agreement file [{}].",
                 agreement_path.display()
             )
         })?;
 
-        info!("Downloading image: {}", image_url);
+        let split: Vec<&str> = image_url.rsplitn(2, "/").collect();
+        let image_name = split.first().ok_or(anyhow!("Invalid URL: {}, image_url"))?;
+        let image_path = cachedir.join(image_name);
 
-        let image = download_image(&image_url, cachedir)?;
+        let image = WasmImage::new(&image_path)
+            .with_context(|| format!("Can't read image file {}.", image_path.display()))?;
         write_deploy_file(workdir, &image)?;
 
-        Ok(info!("Downloading completed."))
+        Ok(info!("Deploy completed."))
     }
 
     fn start(workdir: &Path, _cachedir: &Path) -> Result<()> {
@@ -136,14 +137,6 @@ impl ExeUnitMain {
         create_mount_points(&mounts)?;
         Ok(Wasmtime::new(mounts))
     }
-}
-
-fn download_image(url: &str, cachedir: &Path) -> Result<WasmImage> {
-    let image_path = download_image_http(url, cachedir)?;
-    let image = WasmImage::new(&image_path)
-        .with_context(|| format!("Can't read image file {}.", image_path.display()))?;
-
-    Ok(image)
 }
 
 fn create_mount_points(mounts: &Vec<DirectoryMount>) -> Result<()> {
