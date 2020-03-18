@@ -1,3 +1,0 @@
-{
-    "golem.srv.comp.wasm.task_package": "http://localhost:8000/rust-wasi-tutorial.zip"
-}
