@@ -69,6 +69,17 @@ jobs:
           toolchain: stable
           target: x86_64-unknown-linux-musl
           override: true
+      - name: Cargo Deb
+        if: matrix.os == 'ubuntu'
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cargo-deb
+      - name: Build Deb
+        if: matrix.os == 'ubuntu'
+        uses: actions-rs/cargo@v1
+        with:
+          command: deb
       - name: Build
         uses: actions-rs/cargo@v1
         with:
@@ -85,12 +96,14 @@ jobs:
           target=
           if [ "$OS_NAME" = "ubuntu" ]; then
             OS_NAME=linux
+            echo "::set-output name=deb::`basename target/debian/*.deb`"
           elif [ "$OS_NAME" == "macos" ]; then
             OS_NAME=osx
           fi
           TARGET_DIR=releases/ya-runtime-wasi-${OS_NAME}-${TAG_NAME}
 
           mkdir -p "$TARGET_DIR"
+          cp conf/ya-runtime-wasi.json "$TARGET_DIR/"
           if [ "$OS_NAME" = "windows" ]; then
               cp target/release/ya-runtime-wasi.exe "$TARGET_DIR/"
               strip "$TARGET_DIR/ya-runtime-wasi.exe"
@@ -108,8 +121,16 @@ jobs:
               echo "::set-output name=media::application/tar+gzip"
               (cd releases && tar czvf "ya-runtime-wasi-${OS_NAME}-${TAG_NAME}.tar.gz" "ya-runtime-wasi-${OS_NAME}-${TAG_NAME}")
           fi
-      - name: Upload
-        run: echo todo upload ${{ steps.pack.outputs.artifact }}
+      - name: Upload Deb
+        if: matrix.os == 'ubuntu'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.release_upload_url.outputs.result }}
+          asset_path: ./target/debian/${{ steps.pack.outputs.deb }}
+          asset_name: ${{ steps.pack.outputs.deb }}
+          asset_content_type: application/vnd.debian.binary-package
       - name: Upload Release Asset
         id: upload-release-asset
         uses: actions/upload-release-asset@v1
