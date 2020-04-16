@@ -1,10 +1,16 @@
 [package]
 name = "ya-runtime-wasi"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 license = "GPL-3.0"
 description="yagna wasmtime integration"
+
+[package.metadata.deb]
+assets = [
+    ["target/release/ya-runtime-wasi", "usr/lib/yagna/plugins/", "755"],
+    ["conf/ya-runtime-wasi.json", "usr/lib/yagna/plugins/", "644"]
+]
 [dependencies]
 anyhow = "1.0.19"
 env_logger = "0.6"
@@ -25,10 +31,4 @@ codegen-units = 1
 lto = true
 opt-level = 3
 panic = "abort"
-
-[package.metadata.deb]
-assets = [
-    ["target/release/ya-runtime-wasi", "usr/lib/yagna/plugins/", "755"],
-    ["conf/ya-runtime-wasi.json", "usr/lib/yagna/plugins/", "644"]
-]
 
