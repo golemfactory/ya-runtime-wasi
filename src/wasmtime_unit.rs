@@ -149,12 +149,12 @@ impl Wasmtime {
         let mut preopen_dirs = Vec::new();
 
         for DirectoryMount { guest, host } in dirs.iter() {
-            info!("Mounting: {}::{}", host.display(), guest.display());
+            info!("Mounting: {}", guest.display());
 
             preopen_dirs.push((
                 guest.as_os_str().to_str().unwrap().to_string(),
                 preopen_dir(host)
-                    .with_context(|| format!("Failed to open directory '{}'", host.display()))?,
+                    .with_context(|| format!("Failed to mount '{}'", guest.display()))?,
             ));
         }
 
