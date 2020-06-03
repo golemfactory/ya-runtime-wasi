@@ -1,14 +1,15 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use log::info;
-use serde::{Deserialize, Serialize};
+
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use structopt::StructOpt;
 
+use crate::deploy::{deploy, DeployFile};
 use crate::manifest::{MountPoint, WasmImage};
 use crate::wasmtime_unit::Wasmtime;
-use std::fs::File;
-use std::io::BufReader;
+
+
 
 #[derive(StructOpt)]
 pub enum Commands {
@@ -37,92 +38,53 @@ pub struct DirectoryMount {
     pub guest: PathBuf,
 }
 
-#[derive(Serialize, Deserialize)]
-struct DeployFile {
-    image_path: PathBuf,
+pub fn entrypoint(cmdline: CmdArgs) -> Result<()> {
+    match cmdline.command {
+        Commands::Run { entrypoint, args } => run(&cmdline.workdir, &entrypoint, args),
+        Commands::Deploy {} => deploy(&cmdline.workdir, &cmdline.task_package),
+        Commands::Start {} => start(&cmdline.workdir),
+    }
 }
 
-pub struct ExeUnitMain;
+fn start(workdir: &Path) -> Result<()> {
+    let deploy_file = DeployFile::load(workdir)?;
 
-impl ExeUnitMain {
-    pub fn entrypoint(cmdline: CmdArgs) -> Result<()> {
-        match cmdline.command {
-            Commands::Run { entrypoint, args } => {
-                ExeUnitMain::run(&cmdline.workdir, &entrypoint, args)
-            }
-            Commands::Deploy {} => ExeUnitMain::deploy(&cmdline.workdir, &cmdline.task_package),
-            Commands::Start {} => ExeUnitMain::start(&cmdline.workdir),
-        }
-    }
+    info!(
+        "Validating deployed image {}.",
+        deploy_file.image_path.display()
+    );
 
-    fn deploy(workdir: &Path, path: &Path) -> Result<()> {
-        let image = WasmImage::new(&path)
-            .with_context(|| format!("Can't read image file {}.", path.display()))?;
-        write_deploy_file(workdir, &image)?;
+    let mut image = WasmImage::new(&deploy_file.image_path)?;
+    let mut wasmtime = create_wasmtime(workdir, &mut image)?;
 
-        Ok(info!("Deploy completed."))
-    }
+    wasmtime.load_binaries(&mut image)?;
 
-    fn start(workdir: &Path) -> Result<()> {
-        info!(
-            "Loading deploy file: {}",
-            get_deploy_path(workdir).display()
-        );
+    Ok(info!("Validation completed."))
+}
 
-        let deploy_file = read_deploy_file(workdir).with_context(|| {
-            format!(
-                "Can't read deploy file {}. Did you run deploy command?",
-                get_deploy_path(workdir).display()
-            )
-        })?;
+fn run(workdir: &Path, entrypoint: &str, args: Vec<String>) -> Result<()> {
+    let deploy_file = DeployFile::load(workdir)?;
 
-        info!(
-            "Validating deployed image {}.",
-            deploy_file.image_path.display()
-        );
+    let mut image = WasmImage::new(&deploy_file.image_path)?;
+    let mut wasmtime = create_wasmtime(workdir, &mut image)?;
 
-        let mut image = WasmImage::new(&deploy_file.image_path)?;
-        let mut wasmtime = ExeUnitMain::create_wasmtime(workdir, &mut image)?;
+    info!("Running image: {}", deploy_file.image_path.display());
 
-        wasmtime.load_binaries(&mut image)?;
+    // Since wasmtime object doesn't live across binary executions,
+    // we must deploy image for the second time, what will load binary to wasmtime.
+    let entrypoint = image.find_entrypoint(entrypoint)?;
+    wasmtime.load_binary(&mut image, &entrypoint)?;
+    wasmtime.run(entrypoint, args)?;
 
-        Ok(info!("Validation completed."))
-    }
+    Ok(info!("Computations completed."))
+}
 
-    fn run(workdir: &Path, entrypoint: &str, args: Vec<String>) -> Result<()> {
-        info!(
-            "Loading deploy file: {}",
-            get_deploy_path(workdir).display()
-        );
+fn create_wasmtime(workdir: &Path, image: &mut WasmImage) -> Result<Wasmtime> {
+    let manifest = image.manifest();
+    let mounts = directories_mounts(workdir, &manifest.mount_points)?;
 
-        let deploy_file = read_deploy_file(workdir).with_context(|| {
-            format!(
-                "Can't read deploy file {}. Did you run deploy command?",
-                get_deploy_path(workdir).display()
-            )
-        })?;
-
-        let mut image = WasmImage::new(&deploy_file.image_path)?;
-        let mut wasmtime = ExeUnitMain::create_wasmtime(workdir, &mut image)?;
-
-        info!("Running image: {}", deploy_file.image_path.display());
-
-        // Since wasmtime object doesn't live across binary executions,
-        // we must deploy image for the second time, what will load binary to wasmtime.
-        let entrypoint = image.find_entrypoint(entrypoint)?;
-        wasmtime.load_binary(&mut image, &entrypoint)?;
-        wasmtime.run(entrypoint, args)?;
-
-        Ok(info!("Computations completed."))
-    }
-
-    fn create_wasmtime(workdir: &Path, image: &mut WasmImage) -> Result<Wasmtime> {
-        let manifest = image.get_manifest();
-        let mounts = directories_mounts(workdir, &manifest.mount_points)?;
-
-        create_mount_points(&mounts)?;
-        Ok(Wasmtime::new(mounts))
-    }
+    create_mount_points(&mounts)?;
+    Ok(Wasmtime::new(mounts))
 }
 
 fn create_mount_points(mounts: &Vec<DirectoryMount>) -> Result<()> {
@@ -172,27 +134,6 @@ fn validate_path(path: &Path) -> Result<()> {
         }
     }
     Ok(())
-}
-
-fn write_deploy_file(workdir: &Path, image: &WasmImage) -> Result<()> {
-    let deploy_file = get_deploy_path(workdir);
-    let deploy = DeployFile {
-        image_path: image.path().to_owned(),
-    };
-
-    Ok(serde_json::to_writer(&File::create(deploy_file)?, &deploy)?)
-}
-
-fn read_deploy_file(workdir: &Path) -> Result<DeployFile> {
-    let deploy_file = get_deploy_path(workdir);
-
-    let reader = BufReader::new(File::open(deploy_file)?);
-    let deploy = serde_json::from_reader(reader)?;
-    return Ok(deploy);
-}
-
-fn get_deploy_path(workdir: &Path) -> PathBuf {
-    workdir.join("deploy.json")
 }
 
 #[cfg(test)]

@@ -1,8 +1,9 @@
+mod deploy;
 mod entrypoint;
 mod manifest;
 mod wasmtime_unit;
 
-use crate::entrypoint::{CmdArgs, ExeUnitMain};
+use crate::entrypoint::{entrypoint, CmdArgs};
 use anyhow::Result;
 use std::env;
 use structopt::StructOpt;
@@ -16,5 +17,5 @@ fn main() -> Result<()> {
     env_logger::init();
 
     let cmdargs = CmdArgs::from_args();
-    Ok(ExeUnitMain::entrypoint(cmdargs)?)
+    Ok(entrypoint(cmdargs)?)
 }

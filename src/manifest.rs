@@ -69,7 +69,7 @@ impl WasmImage {
         Ok(serde_json::from_reader(entry)?)
     }
 
-    pub fn get_manifest(&self) -> &Manifest {
+    pub fn manifest(&self) -> &Manifest {
         &self.manifest
     }
 
