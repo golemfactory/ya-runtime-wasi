@@ -47,8 +47,8 @@ fn start(workdir: &Path) -> Result<()> {
     let deploy_file = DeployFile::load(workdir)?;
 
     info!(
-        "Validating deployed image {}.",
-        deploy_file.image_path.display()
+        "Validating deployed image {:?}.",
+        get_log_path(workdir, &deploy_file.image_path)
     );
 
     let mut image = WasmImage::new(&deploy_file.image_path)?;
@@ -65,6 +65,10 @@ fn run(workdir: &Path, entrypoint: &str, args: Vec<String>) -> Result<()> {
     let mut image = WasmImage::new(&deploy_file.image_path)?;
     let mut wasmtime = create_wasmtime(workdir, &mut image, &deploy_file)?;
 
+    info!(
+        "Running image: {:?}",
+        get_log_path(workdir, &deploy_file.image_path)
+    );
     info!("Running image: {}", deploy_file.image_path.display());
 
     // Since wasmtime object doesn't live across binary executions,
@@ -87,14 +91,14 @@ fn create_wasmtime(
         .map(|v| {
             let host = workdir.join(&v.name);
             let guest = PathBuf::from(&v.path);
-            validate_path(&guest)?;
+            validate_mount_path(&guest)?;
             Ok(DirectoryMount { host, guest })
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
     Ok(Wasmtime::new(mounts))
 }
 
-fn validate_path(path: &Path) -> Result<()> {
+fn validate_mount_path(path: &Path) -> Result<()> {
     // Protect ExeUnit from directory traversal attack.
     // Wasm can access only paths inside working directory.
     let path = PathBuf::from(path);
@@ -113,22 +117,43 @@ fn validate_path(path: &Path) -> Result<()> {
     Ok(())
 }
 
+fn get_log_path<'a, P: AsRef<Path>>(workdir: &'a Path, path: &'a P) -> &'a Path {
+    let path_ref = path.as_ref();
+    // try to return a relative path
+    path_ref
+        .strip_prefix(workdir)
+        .ok()
+        // use the file name if paths do not share a common prefix
+        .or_else(|| path_ref.file_name().map(|file_name| Path::new(file_name)))
+        // in an unlikely situation return an empty path
+        .unwrap_or_else(|| Path::new(""))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_path_validation() {
-        assert_eq!(validate_path(&PathBuf::from("/path/path")).is_err(), true);
+    fn test_mount_path_validation() {
         assert_eq!(
-            validate_path(&PathBuf::from("path/path/path")).is_err(),
-            false
-        );
-        assert_eq!(validate_path(&PathBuf::from("path/../path")).is_err(), true);
-        assert_eq!(
-            validate_path(&PathBuf::from("./path/../path")).is_err(),
+            validate_mount_path(&PathBuf::from("/path/path")).is_err(),
             true
         );
-        assert_eq!(validate_path(&PathBuf::from("./path/path")).is_err(), true);
+        assert_eq!(
+            validate_mount_path(&PathBuf::from("path/path/path")).is_err(),
+            false
+        );
+        assert_eq!(
+            validate_mount_path(&PathBuf::from("path/../path")).is_err(),
+            true
+        );
+        assert_eq!(
+            validate_mount_path(&PathBuf::from("./path/../path")).is_err(),
+            true
+        );
+        assert_eq!(
+            validate_mount_path(&PathBuf::from("./path/path")).is_err(),
+            true
+        );
     }
 }
