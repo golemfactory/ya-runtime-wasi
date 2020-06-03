@@ -1,6 +1,7 @@
 use crate::manifest::WasmImage;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 use uuid::Uuid;
@@ -20,7 +21,7 @@ impl DeployFile {
             .iter()
             .map(|mount_point| ContainerVolume {
                 name: format!("vol-{}", Uuid::new_v4()),
-                path: mount_point.path().into(),
+                path: absolute_path(mount_point.path()).into(),
             })
             .collect();
         Ok(DeployFile { image_path, vols })
@@ -43,10 +44,25 @@ impl DeployFile {
         let deploy = serde_json::from_reader(reader)?;
         return Ok(deploy);
     }
+
+    pub fn create_dirs(&self, work_dir: &Path) -> anyhow::Result<()> {
+        for vol in &self.vols {
+            fs::create_dir(work_dir.join(&vol.name))?;
+        }
+        Ok(())
+    }
 }
 
 fn deploy_path(work_dir: &Path) -> PathBuf {
     work_dir.join("deploy.json")
+}
+
+fn absolute_path(path: &str) -> Cow<'_, str> {
+    if path.starts_with('/') {
+        Cow::Borrowed(path)
+    } else {
+        Cow::Owned(format!("/{}", path))
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -84,6 +100,7 @@ pub fn deploy(workdir: &Path, path: &Path) -> anyhow::Result<()> {
         .with_context(|| format!("Can't read image file {}.", path.display()))?;
     let deploy_file = DeployFile::for_image(&image)?;
     deploy_file.save(workdir)?;
+    deploy_file.create_dirs(workdir)?;
 
     let result = DeployResult {
         valid: Ok(format!("Deploy completed.")),
@@ -91,6 +108,6 @@ pub fn deploy(workdir: &Path, path: &Path) -> anyhow::Result<()> {
         start_mode: StartMode::Empty,
     };
 
-    eprintln!("{}", serde_json::to_string_pretty(&result)?);
+    println!("{}", serde_json::to_string_pretty(&result)?);
     Ok(())
 }

@@ -1,15 +1,12 @@
 use anyhow::{bail, Result};
 use log::info;
 
-use std::fs;
 use std::path::{Component, Path, PathBuf};
 use structopt::StructOpt;
 
 use crate::deploy::{deploy, DeployFile};
-use crate::manifest::{MountPoint, WasmImage};
+use crate::manifest::WasmImage;
 use crate::wasmtime_unit::Wasmtime;
-
-
 
 #[derive(StructOpt)]
 pub enum Commands {
@@ -55,7 +52,7 @@ fn start(workdir: &Path) -> Result<()> {
     );
 
     let mut image = WasmImage::new(&deploy_file.image_path)?;
-    let mut wasmtime = create_wasmtime(workdir, &mut image)?;
+    let mut wasmtime = create_wasmtime(workdir, &mut image, &deploy_file)?;
 
     wasmtime.load_binaries(&mut image)?;
 
@@ -66,7 +63,7 @@ fn run(workdir: &Path, entrypoint: &str, args: Vec<String>) -> Result<()> {
     let deploy_file = DeployFile::load(workdir)?;
 
     let mut image = WasmImage::new(&deploy_file.image_path)?;
-    let mut wasmtime = create_wasmtime(workdir, &mut image)?;
+    let mut wasmtime = create_wasmtime(workdir, &mut image, &deploy_file)?;
 
     info!("Running image: {}", deploy_file.image_path.display());
 
@@ -79,42 +76,22 @@ fn run(workdir: &Path, entrypoint: &str, args: Vec<String>) -> Result<()> {
     Ok(info!("Computations completed."))
 }
 
-fn create_wasmtime(workdir: &Path, image: &mut WasmImage) -> Result<Wasmtime> {
-    let manifest = image.manifest();
-    let mounts = directories_mounts(workdir, &manifest.mount_points)?;
-
-    create_mount_points(&mounts)?;
-    Ok(Wasmtime::new(mounts))
-}
-
-fn create_mount_points(mounts: &Vec<DirectoryMount>) -> Result<()> {
-    for mount in mounts.iter() {
-        fs::create_dir_all(&mount.host)?
-    }
-    Ok(())
-}
-
-fn directories_mounts(
+fn create_wasmtime(
     workdir: &Path,
-    mount_points: &Vec<MountPoint>,
-) -> Result<Vec<DirectoryMount>> {
-    mount_points
+    _image: &mut WasmImage,
+    deploy: &DeployFile,
+) -> Result<Wasmtime> {
+    let mounts = deploy
+        .vols
         .iter()
-        .map(|mount_point| {
-            let mut mount = PathBuf::from(mount_point.path());
-            let host_path = workdir.join(&mount);
-
-            validate_path(&mount)?;
-
-            // Requestor should see all paths as mounted to root.
-            mount = PathBuf::from("/").join(mount);
-
-            Ok(DirectoryMount {
-                host: host_path,
-                guest: mount,
-            })
+        .map(|v| {
+            let host = workdir.join(&v.name);
+            let guest = PathBuf::from(&v.path);
+            validate_path(&guest)?;
+            Ok(DirectoryMount { host, guest })
         })
-        .collect()
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    Ok(Wasmtime::new(mounts))
 }
 
 fn validate_path(path: &Path) -> Result<()> {
@@ -123,8 +100,8 @@ fn validate_path(path: &Path) -> Result<()> {
     let path = PathBuf::from(path);
     for component in path.components() {
         match component {
-            Component::RootDir | Component::Prefix { .. } => {
-                bail!("Expected relative path instead of [{}].", path.display())
+            Component::Prefix { .. } => {
+                bail!("Expected unix path instead of [{}].", path.display())
             }
             Component::ParentDir { .. } => {
                 bail!("Path [{}] contains illegal '..' component.", path.display())
