@@ -56,8 +56,9 @@ impl ExeUnitMain {
     }
 
     fn deploy(workdir: &Path, path: &Path) -> Result<()> {
-        let image = WasmImage::new(&path)
-            .with_context(|| format!("Can't read image file {}.", path.display()))?;
+        let image = WasmImage::new(&path).with_context(|| {
+            format!("Can't read image file {:?}.", get_log_path(&workdir, &path))
+        })?;
         write_deploy_file(workdir, &image)?;
 
         Ok(info!("Deploy completed."))
@@ -65,20 +66,20 @@ impl ExeUnitMain {
 
     fn start(workdir: &Path) -> Result<()> {
         info!(
-            "Loading deploy file: {}",
-            get_deploy_path(workdir).display()
+            "Loading deploy file: {:?}",
+            get_log_path(workdir, &get_deploy_path(workdir))
         );
 
         let deploy_file = read_deploy_file(workdir).with_context(|| {
             format!(
-                "Can't read deploy file {}. Did you run deploy command?",
-                get_deploy_path(workdir).display()
+                "Can't read deploy file {:?}. Did you run deploy command?",
+                get_log_path(workdir, &get_deploy_path(workdir))
             )
         })?;
 
         info!(
-            "Validating deployed image {}.",
-            deploy_file.image_path.display()
+            "Validating deployed image {:?}.",
+            get_log_path(workdir, &deploy_file.image_path)
         );
 
         let mut image = WasmImage::new(&deploy_file.image_path)?;
@@ -91,21 +92,24 @@ impl ExeUnitMain {
 
     fn run(workdir: &Path, entrypoint: &str, args: Vec<String>) -> Result<()> {
         info!(
-            "Loading deploy file: {}",
-            get_deploy_path(workdir).display()
+            "Loading deploy file: {:?}",
+            get_log_path(workdir, &get_deploy_path(workdir))
         );
 
         let deploy_file = read_deploy_file(workdir).with_context(|| {
             format!(
-                "Can't read deploy file {}. Did you run deploy command?",
-                get_deploy_path(workdir).display()
+                "Can't read deploy file {:?}. Did you run deploy command?",
+                get_log_path(workdir, &get_deploy_path(workdir))
             )
         })?;
 
         let mut image = WasmImage::new(&deploy_file.image_path)?;
         let mut wasmtime = ExeUnitMain::create_wasmtime(workdir, &mut image)?;
 
-        info!("Running image: {}", deploy_file.image_path.display());
+        info!(
+            "Running image: {:?}",
+            get_log_path(workdir, &deploy_file.image_path)
+        );
 
         // Since wasmtime object doesn't live across binary executions,
         // we must deploy image for the second time, what will load binary to wasmtime.
@@ -142,7 +146,7 @@ fn directories_mounts(
             let mut mount = PathBuf::from(mount_point.path());
             let host_path = workdir.join(&mount);
 
-            validate_path(&mount)?;
+            validate_mount_path(&mount)?;
 
             // Requestor should see all paths as mounted to root.
             mount = PathBuf::from("/").join(mount);
@@ -155,19 +159,23 @@ fn directories_mounts(
         .collect()
 }
 
-fn validate_path(path: &Path) -> Result<()> {
+fn validate_mount_path(path: &Path) -> Result<()> {
     // Protect ExeUnit from directory traversal attack.
     // Wasm can access only paths inside working directory.
     let path = PathBuf::from(path);
     for component in path.components() {
         match component {
             Component::RootDir | Component::Prefix { .. } => {
-                bail!("Expected relative path instead of [{}].", path.display())
+                bail!("Only relative mount paths are allowed.")
             }
-            Component::ParentDir { .. } => {
-                bail!("Path [{}] contains illegal '..' component.", path.display())
-            }
-            Component::CurDir => bail!("Path [{}] contains illegal '.' component.", path.display()),
+            Component::ParentDir { .. } => bail!(
+                "Mount path [{}] contains illegal '..' component.",
+                path.display()
+            ),
+            Component::CurDir => bail!(
+                "Mount path [{}] contains illegal '.' component.",
+                path.display()
+            ),
             _ => (),
         }
     }
@@ -195,22 +203,44 @@ fn get_deploy_path(workdir: &Path) -> PathBuf {
     workdir.join("deploy.json")
 }
 
+fn get_log_path<P: AsRef<Path>>(workdir: &Path, path: &P) -> PathBuf {
+    let path_ref = path.as_ref();
+    // try to return a relative path
+    path_ref
+        .strip_prefix(workdir)
+        .map(|path| path.to_path_buf())
+        .ok()
+        // use the file name if paths do not share a common prefix
+        .or_else(|| path_ref.file_name().map(PathBuf::from))
+        // in an unlikely situation return an empty path
+        .unwrap_or_else(|| PathBuf::new())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_path_validation() {
-        assert_eq!(validate_path(&PathBuf::from("/path/path")).is_err(), true);
+    fn test_mount_path_validation() {
         assert_eq!(
-            validate_path(&PathBuf::from("path/path/path")).is_err(),
-            false
-        );
-        assert_eq!(validate_path(&PathBuf::from("path/../path")).is_err(), true);
-        assert_eq!(
-            validate_path(&PathBuf::from("./path/../path")).is_err(),
+            validate_mount_path(&PathBuf::from("/path/path")).is_err(),
             true
         );
-        assert_eq!(validate_path(&PathBuf::from("./path/path")).is_err(), true);
+        assert_eq!(
+            validate_mount_path(&PathBuf::from("path/path/path")).is_err(),
+            false
+        );
+        assert_eq!(
+            validate_mount_path(&PathBuf::from("path/../path")).is_err(),
+            true
+        );
+        assert_eq!(
+            validate_mount_path(&PathBuf::from("./path/../path")).is_err(),
+            true
+        );
+        assert_eq!(
+            validate_mount_path(&PathBuf::from("./path/path")).is_err(),
+            true
+        );
     }
 }
