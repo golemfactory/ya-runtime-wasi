@@ -10,7 +10,7 @@ use log::info;
 use std::collections::HashMap;
 use std::fs::File;
 
-pub struct Wasmtime {
+pub(crate) struct Wasmtime {
     linker: Linker,
     mounts: Vec<DirectoryMount>,
     /// Modules loaded by the user.
