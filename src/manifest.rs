@@ -28,7 +28,7 @@ pub struct EntryPoint {
     pub wasm_path: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub enum MountPoint {
     Ro(String),
@@ -46,7 +46,7 @@ impl MountPoint {
     }
 }
 
-pub struct WasmImage {
+pub(crate) struct WasmImage {
     archive: ZipArchive<File>,
     manifest: Manifest,
     image_path: PathBuf,
