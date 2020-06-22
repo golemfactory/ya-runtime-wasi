@@ -1,0 +1,11 @@
+[package]
+name = "test-programs"
+version = "0.1.0"
+authors = ["Jakub Konka <kubkon@jakubkonka.com>"]
+edition = "2018"
+
+[features]
+test_programs = []
+
+[dependencies]
+
