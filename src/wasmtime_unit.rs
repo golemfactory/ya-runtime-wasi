@@ -5,21 +5,29 @@ use wasi_common::{self, preopen_dir, WasiCtxBuilder};
 use wasmtime::{Linker, Module, Store, Trap};
 use wasmtime_wasi::Wasi;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Context, Result, bail};
 use log::info;
+use std::collections::HashMap;
 use std::fs::File;
 
 pub struct Wasmtime {
     linker: Linker,
     mounts: Vec<DirectoryMount>,
+    /// Modules loaded by the user.
+    modules: HashMap<EntryPoint, Module>,
 }
 
 impl Wasmtime {
     pub fn new(mounts: Vec<DirectoryMount>) -> Wasmtime {
         let store = Store::default();
         let linker = Linker::new(&store);
-        let wasmtime = Wasmtime { linker, mounts };
-        wasmtime
+        let modules = HashMap::new();
+
+        Wasmtime {
+            linker,
+            mounts,
+            modules,
+        }
     }
 }
 
@@ -57,14 +65,23 @@ impl Wasmtime {
                 entrypoint.id
             )
         })?;
-        self.linker
-            .module(&entrypoint.id, &module)
-            .with_context(|| format!("Failed to instantiate module: '{}'", entrypoint.id))?;
+
+        if let Some(_) = self.modules.insert(entrypoint.to_owned(), module) {
+            bail!("Module already defined: '{}'", entrypoint.id);
+        }
 
         Ok(())
     }
 
-    fn invoke(&self, entrypoint: &EntryPoint) -> Result<()> {
+    fn invoke(&mut self, entrypoint: &EntryPoint) -> Result<()> {
+        let module = match self.modules.get(entrypoint) {
+            Some(module) => module,
+            None => bail!("Module not found: '{}'", entrypoint.id),
+        };
+        self.linker
+            .module(&entrypoint.id, &module)
+            .with_context(|| format!("Failed to instantiate module: '{}'", entrypoint.id))?;
+
         // TODO for now, we only allow invoking default Wasm export per module,
         // i.e., `_start` export. In the future, it could be useful to allow
         // invoking custom exports as well.

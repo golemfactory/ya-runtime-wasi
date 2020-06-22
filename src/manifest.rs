@@ -21,7 +21,7 @@ pub struct Manifest {
     pub mount_points: Vec<MountPoint>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Hash, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct EntryPoint {
     pub id: String,
