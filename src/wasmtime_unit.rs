@@ -1,33 +1,24 @@
 use crate::entrypoint::DirectoryMount;
 use crate::manifest::{EntryPoint, WasmImage};
 
-use wasi_common::preopen_dir;
-use wasmtime::*;
-use wasmtime_wasi::old::snapshot_0::create_wasi_instance as create_wasi_instance_snapshot_0;
+use wasi_common::{self, preopen_dir, WasiCtxBuilder};
+use wasmtime::{Linker, Module, Store, Trap};
+use wasmtime_wasi::Wasi;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, Context, Result};
 use log::info;
-use std::collections::HashMap;
 use std::fs::File;
 
 pub struct Wasmtime {
-    store: Store,
+    linker: Linker,
     mounts: Vec<DirectoryMount>,
-    /// Wasi modules instances and other dependencies, that we can add in future.
-    dependencies: HashMap<String, Instance>,
-    /// Modules loaded by user.
-    modules: HashMap<String, Module>,
 }
 
 impl Wasmtime {
     pub fn new(mounts: Vec<DirectoryMount>) -> Wasmtime {
-        let wasmtime = Wasmtime {
-            store: Store::default(),
-            mounts,
-            dependencies: HashMap::<String, Instance>::new(),
-            modules: HashMap::<String, Module>::new(),
-        };
-
+        let store = Store::default();
+        let linker = Linker::new(&store);
+        let wasmtime = Wasmtime { linker, mounts };
         wasmtime
     }
 }
@@ -35,20 +26,22 @@ impl Wasmtime {
 impl Wasmtime {
     pub fn load_binaries(&mut self, mut image: &mut WasmImage) -> Result<()> {
         // Loading binary will validate if it can be correctly loaded by wasmtime.
-        for entrypoint in image.list_entrypoints().iter() {
+        for entrypoint in &image.list_entrypoints() {
             self.load_binary(&mut image, entrypoint)?;
         }
+
         Ok(())
     }
 
     pub fn run(&mut self, image: EntryPoint, args: Vec<String>) -> Result<()> {
-        let args = Wasmtime::prepare_args(&args, &image);
-
-        self.create_wasi_module(&args)?;
-        let instance = self.create_instance(&image.id)?;
+        let args = Wasmtime::compute_args(&args, &image);
+        let preopens = self.compute_preopens()?;
+        self.add_wasi_modules(&args, &preopens)?;
 
         info!("Running wasm binary with arguments {:?}", args);
-        Ok(Wasmtime::run_instance(&instance, "_start")?)
+        self.invoke(&image)?;
+
+        Ok(())
     }
 
     pub fn load_binary(&mut self, image: &mut WasmImage, entrypoint: &EntryPoint) -> Result<()> {
@@ -58,101 +51,114 @@ impl Wasmtime {
             .load_binary(entrypoint)
             .with_context(|| format!("Can't load wasm binary {}.", entrypoint.id))?;
 
-        let module = Module::new(&self.store, &wasm_binary).with_context(|| {
-            format!("WASM module creation failed for binary: {}.", entrypoint.id)
+        let module = Module::new(self.linker.store().engine(), wasm_binary).with_context(|| {
+            format!(
+                "Failed to create Wasm module for binary: '{}'",
+                entrypoint.id
+            )
         })?;
+        self.linker
+            .module(&entrypoint.id, &module)
+            .with_context(|| format!("Failed to instantiate module: '{}'", entrypoint.id))?;
 
-        self.modules.insert(entrypoint.id.clone(), module);
         Ok(())
     }
 
-    fn run_instance(instance: &Instance, entrypoint: &str) -> Result<()> {
-        info!("Running wasm binary entrypoint {}", entrypoint);
+    fn invoke(&self, entrypoint: &EntryPoint) -> Result<()> {
+        // TODO for now, we only allow invoking default Wasm export per module,
+        // i.e., `_start` export. In the future, it could be useful to allow
+        // invoking custom exports as well.
+        let run = self
+            .linker
+            .get_default(&entrypoint.id)?
+            .get0::<()>()
+            .with_context(|| {
+                format!(
+                    "Failed to find '_start' export in module; did you build a library by mistake?"
+                )
+            })?;
 
-        let function = instance
-            .find_export_by_name("_start")
-            .with_context(|| format!("Can't find {} entrypoint.", entrypoint))?
-            .func()
-            .with_context(|| format!("Can't find {} entrypoint.", entrypoint))?;
-        //TODO: Return error code from execution.
-        let _result = function.borrow().call(&[])?;
+        if let Err(err) =
+            run().with_context(|| format!("Failed to run module: '{}'", entrypoint.id))
+        {
+            match err.downcast_ref::<Trap>() {
+                None => return Err(err),
+                Some(trap) => {
+                    // TODO bubble up exit code.
+                    let exit_code = match trap.i32_exit_status() {
+                        Some(status) => {
+                            // On Windows, exit status 3 indicates an abort (see below),
+                            // so return 1 indicating a non-zero status to avoid ambiguity.
+                            if cfg!(windows) && status >= 3 {
+                                1
+                            } else {
+                                status
+                            }
+                        }
+                        None => {
+                            if cfg!(windows) {
+                                // On Windows, return 3.
+                                // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=vs-2019
+                                3
+                            } else {
+                                128 + libc::SIGABRT
+                            }
+                        }
+                    };
+
+                    return Err(anyhow!("{}; exit_code={}", err, exit_code));
+                }
+            }
+        }
+
         Ok(())
     }
 
-    fn create_wasi_module(&mut self, args: &Vec<String>) -> Result<()> {
+    fn add_wasi_modules(
+        &mut self,
+        args: &Vec<String>,
+        preopens: &Vec<(String, File)>,
+    ) -> Result<()> {
         info!("Loading wasi.");
 
-        let preopen_dirs = Wasmtime::compute_preopen_dirs(&self.mounts)?;
+        // Add snapshot1 of WASI ABI
+        let mut cx = WasiCtxBuilder::new();
+        cx.inherit_stdio().args(args);
 
-        // Create and instantiate snapshot0 of WASI ABI (FWIW, this is one *can* still
-        // be targeted when using an older Rust toolchain)
-        let snapshot0 = create_wasi_instance_snapshot_0(&self.store, &preopen_dirs, args, &vec![])
-            .with_context(|| format!("Failed to create snapshot0 WASI module."))?;
+        for (name, file) in preopens {
+            cx.preopened_dir(file.try_clone()?, name);
+        }
 
-        // Create and instantiate snapshot1 of WASI ABI, aka the "current stable"
-        let snapshot1 =
-            wasmtime_wasi::create_wasi_instance(&self.store, &preopen_dirs, args, &vec![])
-                .with_context(|| format!("Failed to create snapshot1 WASI module."))?;
+        let cx = cx.build()?;
+        let wasi = Wasi::new(self.linker.store(), cx);
+        wasi.add_to_linker(&mut self.linker)?;
 
-        self.dependencies
-            .insert("wasi_unstable".to_owned(), snapshot0);
-        self.dependencies
-            .insert("wasi_snapshot_preview1".to_owned(), snapshot1);
+        // Add snapshot0 of WASI ABI
+        let mut cx = wasi_common::old::snapshot_0::WasiCtxBuilder::new();
+        cx.inherit_stdio().args(args);
+
+        for (name, file) in preopens {
+            cx.preopened_dir(file.try_clone()?, name);
+        }
+
+        let cx = cx.build()?;
+        let wasi = wasmtime_wasi::old::snapshot_0::Wasi::new(self.linker.store(), cx);
+        wasi.add_to_linker(&mut self.linker)?;
+
         Ok(())
     }
 
-    fn create_instance(&mut self, module_name: &str) -> Result<Instance> {
-        info!("Resolving [{}] module's dependencies.", module_name);
-
-        match self.modules.get_mut(module_name) {
-            Some(mut module) => {
-                let imports = Wasmtime::resolve_imports(&self.dependencies, &mut module)?;
-                let instance = Instance::new(&self.store, &module, &imports)
-                    .with_context(|| format!("WASM instance creation failed."))?;
-                Ok(instance)
-            }
-            None => bail!(
-                "Module {} is not loaded. Did you forgot to run deploy step.",
-                module_name
-            ),
-        }
-    }
-
-    fn resolve_imports(
-        dependencies: &HashMap<String, Instance>,
-        module: &mut Module,
-    ) -> Result<Vec<Extern>> {
-        Ok(module
-            .imports()
-            .iter()
-            .map(|import| {
-                let module_name = import.module();
-                if let Some(instance) = dependencies.get(module_name) {
-                    let field_name = import.name();
-                    if let Some(export) = instance.find_export_by_name(field_name) {
-                        Ok(export.clone())
-                    } else {
-                        bail!(
-                            "Import {} was not found in module {}",
-                            field_name,
-                            module_name
-                        )
-                    }
-                } else {
-                    bail!("Import module {} was not found", module_name)
-                }
-            })
-            .collect::<Result<Vec<_>, _>>()?)
-    }
-
-    fn compute_preopen_dirs(dirs: &Vec<DirectoryMount>) -> Result<Vec<(String, File)>> {
+    fn compute_preopens(&self) -> Result<Vec<(String, File)>> {
         let mut preopen_dirs = Vec::new();
 
-        for DirectoryMount { guest, host } in dirs.iter() {
+        for DirectoryMount { guest, host } in &self.mounts {
             info!("Mounting: {}", guest.display());
 
             preopen_dirs.push((
-                guest.as_os_str().to_str().unwrap().to_string(),
+                guest
+                    .to_str()
+                    .ok_or_else(|| anyhow!("Invalid UTF8: guest = '{}'", guest.display()))?
+                    .to_owned(),
                 preopen_dir(host)
                     .with_context(|| format!("Failed to mount '{}'", guest.display()))?,
             ));
@@ -161,7 +167,7 @@ impl Wasmtime {
         Ok(preopen_dirs)
     }
 
-    fn prepare_args(args: &Vec<String>, entrypoint: &EntryPoint) -> Vec<String> {
+    fn compute_args(args: &Vec<String>, entrypoint: &EntryPoint) -> Vec<String> {
         let mut new_args = Vec::new();
 
         // Entrypoint path is relative to wasm binary package, so we don't
@@ -172,7 +178,7 @@ impl Wasmtime {
         //       on binary existance?
         new_args.push(entrypoint.wasm_path.clone());
 
-        for arg in args.iter() {
+        for arg in args {
             new_args.push(arg.clone());
         }
 
