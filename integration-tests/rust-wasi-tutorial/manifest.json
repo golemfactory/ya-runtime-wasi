@@ -1,0 +1,14 @@
+{
+    "id": "rust-wasi-tutorial",
+    "name": "rust-wasi-tutorial",
+    "entry-points": [
+        {
+            "id": "rust-wasi-tutorial",
+            "wasm-path": "rust-wasi-tutorial.wasm"
+        }
+    ],
+    "mount-points": [
+        { "rw": "input" },
+        { "rw": "output" }
+    ]
+}
