@@ -43,7 +43,8 @@ jobs:
     - name: Cargo test
       uses: actions-rs/cargo@v1
       with:
-        command: test --features integration-tests
+        command: test
+        args: --features integration-tests
     - run: rustup component add clippy
       if: matrix.os == 'linux'
     - uses: actions-rs/clippy-check@v1
