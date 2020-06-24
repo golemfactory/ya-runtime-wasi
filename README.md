@@ -1,14 +1,5 @@
-<div align="center">
-  <h1><code>ya-runtime-wasi</code></h1>
-
-  <p>
-    <strong>Yagna-Wasmtime integration</strong>
-  </p>
-
-  <p>
-    <a href="https://github.com/golemfactory/ya-runtime-wasi/actions"><img src="https://github.com/golemfactory/ya-runtime-wasi/actions?query=workflow%3A%22Continuous+integration%22/badge.svg" /></a>
-  </p>
-</div>
+# Yagna-Wasmtime integration (`ya-runtime-wasi`)
+![Continuous integration](https://github.com/golemfactory/ya-runtime-wasi/workflows/Continuous%20integration/badge.svg)
 
 `ya-runtime-wasi` is a [`Yagna`] plugin that allows the provider to execute WASI modules
 in a safe, sandboxed way. Typically, you will use this crate as part of your Yagna provider
@@ -26,11 +17,13 @@ cargo build
 ```
 
 If you decide to make some tweaks and would like to test if everything still behaves
-as expected, you can trigger included end-to-end tests like so:
+as expected, you can trigger included end-to-end integration tests like so:
 
 ```
-cargo test
+cargo test --features integration-tests
 ```
+
+Note that running the end-to-end tests requires you to have `wasm32-wasi` target installed.
 
 ## Running
 
