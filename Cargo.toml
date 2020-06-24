@@ -26,9 +26,11 @@ wasmtime-wasi = "0.18.0"
 wasi-common = "0.18.0"
 libc = "0.2.60"
 
+[dev-dependencies]
+tempfile = "3"
+
 [build-dependencies]
 anyhow = "1"
-tempfile = "3"
 zip = "0.5"
 
 [profile.release]
