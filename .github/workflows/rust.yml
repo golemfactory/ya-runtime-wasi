@@ -25,6 +25,7 @@ jobs:
       with:
         toolchain: stable
         target: wasm32-wasi
+        components: rustfmt
     - name: Cargo fmt
       uses: actions-rs/cargo@v1
       with:
