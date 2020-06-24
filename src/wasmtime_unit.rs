@@ -5,7 +5,7 @@ use wasi_common::{self, preopen_dir, WasiCtxBuilder};
 use wasmtime::{Linker, Module, Store, Trap};
 use wasmtime_wasi::Wasi;
 
-use anyhow::{anyhow, Context, Result, bail};
+use anyhow::{anyhow, bail, Context, Result};
 use log::info;
 use std::collections::HashMap;
 use std::fs::File;
