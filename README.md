@@ -17,7 +17,8 @@ cargo build
 ```
 
 If you decide to make some tweaks and would like to test if everything still behaves
-as expected, you can trigger included end-to-end integration tests like so:
+as expected, you can trigger included end-to-end integration tests. Make sure you have
+`wasm32-wasi` target installed (`rustup target add wasm32-wasi`) and then run:
 
 ```
 cargo test --features integration-tests
@@ -125,4 +126,3 @@ inside `workspace/output/out`.
 ## License
 
 Licensed under [GPLv3](LICENSE)
-
