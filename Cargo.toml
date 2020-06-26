@@ -1,6 +1,6 @@
 [package]
 name = "ya-runtime-wasi"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -11,6 +11,7 @@ assets = [
     ["target/release/ya-runtime-wasi", "usr/lib/yagna/plugins/", "755"],
     ["conf/ya-runtime-wasi.json", "usr/lib/yagna/plugins/", "644"]
 ]
+
 [dependencies]
 anyhow = "1.0.19"
 env_logger = "0.6"
@@ -20,11 +21,17 @@ serde_json = "1.0"
 structopt = "0.3"
 thiserror = "1.0"
 zip="0.5.3"
+wasmtime = "0.18.0"
+wasmtime-wasi = "0.18.0"
+wasi-common = "0.18.0"
+libc = "0.2.60"
 
-wasmtime = "0.9"
-wasmtime-wasi = "0.9"
-wasi-common = "0.9.0"
+[dev-dependencies]
+tempfile = "3"
 
+[build-dependencies]
+anyhow = "1"
+zip = "0.5"
 
 [profile.release]
 codegen-units = 1
@@ -32,3 +39,5 @@ lto = true
 opt-level = 3
 panic = "abort"
 
+[features]
+integration-tests = []

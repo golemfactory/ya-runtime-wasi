@@ -3,36 +3,13 @@ use log::info;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use structopt::StructOpt;
 
 use crate::manifest::{MountPoint, WasmImage};
 use crate::wasmtime_unit::Wasmtime;
 use std::fs::File;
 use std::io::BufReader;
 
-#[derive(StructOpt)]
-pub enum Commands {
-    Deploy {},
-    Start {},
-    Run {
-        #[structopt(short = "e", long = "entrypoint")]
-        entrypoint: String,
-        args: Vec<String>,
-    },
-}
-
-#[derive(StructOpt)]
-#[structopt(rename_all = "kebab-case")]
-pub struct CmdArgs {
-    #[structopt(short, long)]
-    workdir: PathBuf,
-    #[structopt(short, long)]
-    task_package: PathBuf,
-    #[structopt(subcommand)]
-    command: Commands,
-}
-
-pub struct DirectoryMount {
+pub(crate) struct DirectoryMount {
     pub host: PathBuf,
     pub guest: PathBuf,
 }
@@ -45,17 +22,7 @@ struct DeployFile {
 pub struct ExeUnitMain;
 
 impl ExeUnitMain {
-    pub fn entrypoint(cmdline: CmdArgs) -> Result<()> {
-        match cmdline.command {
-            Commands::Run { entrypoint, args } => {
-                ExeUnitMain::run(&cmdline.workdir, &entrypoint, args)
-            }
-            Commands::Deploy {} => ExeUnitMain::deploy(&cmdline.workdir, &cmdline.task_package),
-            Commands::Start {} => ExeUnitMain::start(&cmdline.workdir),
-        }
-    }
-
-    fn deploy(workdir: &Path, path: &Path) -> Result<()> {
+    pub fn deploy(workdir: &Path, path: &Path) -> Result<()> {
         let image = WasmImage::new(&path).with_context(|| {
             format!("Can't read image file {:?}.", get_log_path(&workdir, &path))
         })?;
@@ -64,7 +31,7 @@ impl ExeUnitMain {
         Ok(info!("Deploy completed."))
     }
 
-    fn start(workdir: &Path) -> Result<()> {
+    pub fn start(workdir: &Path) -> Result<()> {
         info!(
             "Loading deploy file: {:?}",
             get_log_path(workdir, &get_deploy_path(workdir))
@@ -90,7 +57,7 @@ impl ExeUnitMain {
         Ok(info!("Validation completed."))
     }
 
-    fn run(workdir: &Path, entrypoint: &str, args: Vec<String>) -> Result<()> {
+    pub fn run(workdir: &Path, entrypoint: &str, args: Vec<String>) -> Result<()> {
         info!(
             "Loading deploy file: {:?}",
             get_log_path(workdir, &get_deploy_path(workdir))

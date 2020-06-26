@@ -1,0 +1,8 @@
+[package]
+name = "rust-wasi-tutorial"
+version = "0.1.0"
+authors = ["Golem Factory <contact@golem.network>"]
+edition = "2018"
+
+
+[dependencies]
