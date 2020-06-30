@@ -46,7 +46,7 @@ impl MountPoint {
     }
 }
 
-pub(crate) struct WasmImage {
+pub struct WasmImage {
     archive: ZipArchive<File>,
     manifest: Manifest,
     image_path: PathBuf,
@@ -69,7 +69,7 @@ impl WasmImage {
         Ok(serde_json::from_reader(entry)?)
     }
 
-    pub fn get_manifest(&self) -> &Manifest {
+    pub fn manifest(&self) -> &Manifest {
         &self.manifest
     }
 

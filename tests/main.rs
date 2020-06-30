@@ -1,4 +1,4 @@
-#![cfg(feature = "integration-tests")]
+//#![cfg(feature = "integration-tests")]
 
 use anyhow::{Context, Result};
 use std::mem::ManuallyDrop;
@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Once;
 use std::{env, fs};
 use tempfile::{tempdir, TempDir};
-use ya_runtime_wasi::ExeUnitMain;
+use ya_runtime_wasi::{deploy, run, start, DeployFile};
 
 static LOG_INIT: Once = Once::new();
 
@@ -38,8 +38,8 @@ impl TestCase {
         let task_pkg = self.workspace.path().join(self.name);
         fs::copy(zip_path, &task_pkg)?;
 
-        ExeUnitMain::deploy(self.workspace.path(), &task_pkg)?;
-        ExeUnitMain::start(self.workspace.path())?;
+        deploy(self.workspace.path(), &task_pkg)?;
+        start(self.workspace.path())?;
 
         let workspace_path = self.workspace.path();
         match logic(workspace_path)
@@ -64,19 +64,34 @@ impl TestCase {
 #[test]
 fn rust_wasi_tutorial() -> Result<()> {
     TestCase::new("rust-wasi-tutorial").with(|workspace: &Path| {
-        let contents = "This is it!";
-        let input_file_name = "input/in".to_owned();
-        let output_file_name = "output/out".to_owned();
-        let input_path = workspace.join(&input_file_name);
-        let output_path = workspace.join(&output_file_name);
-        fs::write(input_path, contents)?;
+        let deployment = DeployFile::load(workspace).unwrap();
 
-        ExeUnitMain::run(
+        let input_vol = deployment
+            .vols
+            .iter()
+            .find(|vol| vol.path.starts_with("/input"))
+            .map(|vol| workspace.join(&vol.name))
+            .unwrap();
+
+        let output_vol = deployment
+            .vols
+            .iter()
+            .find(|vol| vol.path.starts_with("/output"))
+            .map(|vol| workspace.join(&vol.name))
+            .unwrap();
+
+        let contents = "This is it!";
+        let input_file_name = "in".to_owned();
+        let output_file_name = "out".to_owned();
+        let input_path = input_vol.join(&input_file_name);
+        let output_path = output_vol.join(&output_file_name);
+        fs::write(&input_path, contents)?;
+        run(
             workspace,
             "rust-wasi-tutorial",
             vec![
-                ["/", &input_file_name].join(""),
-                ["/", &output_file_name].join(""),
+                ["/input/", &input_file_name].join(""),
+                ["/output/", &output_file_name].join(""),
             ],
         )?;
 
