@@ -136,10 +136,6 @@ mod tests {
     #[test]
     fn test_mount_path_validation() {
         assert_eq!(
-            validate_mount_path(&PathBuf::from("/path/path")).is_err(),
-            true
-        );
-        assert_eq!(
             validate_mount_path(&PathBuf::from("path/path/path")).is_err(),
             false
         );
