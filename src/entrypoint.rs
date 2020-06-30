@@ -8,6 +8,11 @@ use crate::deploy::{deploy, DeployFile};
 use crate::manifest::WasmImage;
 use crate::wasmtime_unit::Wasmtime;
 
+pub(crate) struct DirectoryMount {
+    pub host: PathBuf,
+    pub guest: PathBuf,
+}
+
 #[derive(StructOpt)]
 pub enum Commands {
     Deploy {},
@@ -28,11 +33,6 @@ pub struct CmdArgs {
     task_package: PathBuf,
     #[structopt(subcommand)]
     command: Commands,
-}
-
-pub struct DirectoryMount {
-    pub host: PathBuf,
-    pub guest: PathBuf,
 }
 
 pub fn entrypoint(cmdline: CmdArgs) -> Result<()> {

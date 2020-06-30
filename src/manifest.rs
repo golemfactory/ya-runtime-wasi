@@ -21,14 +21,14 @@ pub struct Manifest {
     pub mount_points: Vec<MountPoint>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Hash, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct EntryPoint {
     pub id: String,
     pub wasm_path: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub enum MountPoint {
     Ro(String),
