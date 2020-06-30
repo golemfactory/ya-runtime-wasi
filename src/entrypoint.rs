@@ -43,7 +43,7 @@ pub fn entrypoint(cmdline: CmdArgs) -> Result<()> {
     }
 }
 
-fn start(workdir: &Path) -> Result<()> {
+pub fn start(workdir: &Path) -> Result<()> {
     let deploy_file = DeployFile::load(workdir)?;
 
     info!(
@@ -59,7 +59,7 @@ fn start(workdir: &Path) -> Result<()> {
     Ok(info!("Validation completed."))
 }
 
-fn run(workdir: &Path, entrypoint: &str, args: Vec<String>) -> Result<()> {
+pub fn run(workdir: &Path, entrypoint: &str, args: Vec<String>) -> Result<()> {
     let deploy_file = DeployFile::load(workdir)?;
 
     let mut image = WasmImage::new(&deploy_file.image_path)?;
