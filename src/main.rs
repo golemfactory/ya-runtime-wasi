@@ -9,7 +9,7 @@ use std::env;
 use structopt::StructOpt;
 
 fn main() -> Result<()> {
-    let our_rust_log = "cranelift_wasm=warn,cranelift_codegen=info,wasi_common=info";
+    let our_rust_log = "cranelift_wasm=warn,cranelift_codegen=error,wasi_common=error";
     match env::var("RUST_LOG") {
         Err(_) => env::set_var("RUST_LOG", our_rust_log),
         Ok(var) => env::set_var("RUST_LOG", format!("{},{}", var, our_rust_log)),
