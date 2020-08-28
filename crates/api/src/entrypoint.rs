@@ -1,47 +1,11 @@
-use anyhow::{bail, Result};
-use log::info;
-
-use std::path::{Component, Path, PathBuf};
-use structopt::StructOpt;
-
-use crate::deploy::{deploy, DeployFile};
+use crate::deploy::DeployFile;
 use crate::manifest::WasmImage;
 use crate::wasmtime_unit::Wasmtime;
 
-pub(crate) struct DirectoryMount {
-    pub host: PathBuf,
-    pub guest: PathBuf,
-}
+use std::path::{Component, Path, PathBuf};
 
-#[derive(StructOpt)]
-pub enum Commands {
-    Deploy {},
-    Start {},
-    Run {
-        #[structopt(short = "e", long = "entrypoint")]
-        entrypoint: String,
-        args: Vec<String>,
-    },
-}
-
-#[derive(StructOpt)]
-#[structopt(rename_all = "kebab-case")]
-pub struct CmdArgs {
-    #[structopt(short, long)]
-    workdir: PathBuf,
-    #[structopt(short, long)]
-    task_package: PathBuf,
-    #[structopt(subcommand)]
-    command: Commands,
-}
-
-pub fn entrypoint(cmdline: CmdArgs) -> Result<()> {
-    match cmdline.command {
-        Commands::Run { entrypoint, args } => run(&cmdline.workdir, &entrypoint, args),
-        Commands::Deploy {} => deploy(&cmdline.workdir, &cmdline.task_package),
-        Commands::Start {} => start(&cmdline.workdir),
-    }
-}
+use anyhow::{bail, Result};
+use log::info;
 
 pub fn start(workdir: &Path) -> Result<()> {
     let deploy_file = DeployFile::load(workdir)?;
@@ -78,6 +42,11 @@ pub fn run(workdir: &Path, entrypoint: &str, args: Vec<String>) -> Result<()> {
     wasmtime.run(entrypoint, args)?;
 
     Ok(info!("Computations completed."))
+}
+
+pub(crate) struct DirectoryMount {
+    pub host: PathBuf,
+    pub guest: PathBuf,
 }
 
 fn create_wasmtime(
