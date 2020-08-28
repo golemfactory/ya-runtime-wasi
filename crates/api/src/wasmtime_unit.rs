@@ -19,12 +19,12 @@ pub(crate) struct Wasmtime {
 }
 
 impl Wasmtime {
-    pub fn new(mounts: Vec<DirectoryMount>) -> Wasmtime {
+    pub fn new(mounts: Vec<DirectoryMount>) -> Self {
         let store = Store::default();
         let linker = Linker::new(&store);
         let modules = HashMap::new();
 
-        Wasmtime {
+        Self {
             linker,
             mounts,
             modules,
@@ -65,7 +65,7 @@ impl Wasmtime {
             )
         })?;
 
-        if let Some(_) = self.modules.insert(entrypoint.to_owned(), module) {
+        if self.modules.insert(entrypoint.to_owned(), module).is_some() {
             bail!("Module already defined: '{}'", entrypoint.id);
         }
 
@@ -88,11 +88,9 @@ impl Wasmtime {
             .linker
             .get_default(&entrypoint.id)?
             .get0::<()>()
-            .with_context(|| {
-                format!(
-                    "Failed to find '_start' export in module; did you build a library by mistake?"
-                )
-            })?;
+            .context(
+                "Failed to find '_start' export in module; did you build a library by mistake?",
+            )?;
 
         if let Err(err) =
             run().with_context(|| format!("Failed to run module: '{}'", entrypoint.id))
@@ -130,11 +128,7 @@ impl Wasmtime {
         Ok(())
     }
 
-    fn add_wasi_modules(
-        &mut self,
-        args: &Vec<String>,
-        preopens: &Vec<(String, File)>,
-    ) -> Result<()> {
+    fn add_wasi_modules(&mut self, args: &[String], preopens: &[(String, File)]) -> Result<()> {
         info!("Loading wasi.");
 
         // Add snapshot1 of WASI ABI
@@ -183,7 +177,7 @@ impl Wasmtime {
         Ok(preopen_dirs)
     }
 
-    fn compute_args(args: &Vec<String>, entrypoint: &EntryPoint) -> Vec<String> {
+    fn compute_args(args: &[String], entrypoint: &EntryPoint) -> Vec<String> {
         let mut new_args = Vec::new();
 
         // Entrypoint path is relative to wasm binary package, so we don't
@@ -198,6 +192,6 @@ impl Wasmtime {
             new_args.push(arg.clone());
         }
 
-        return new_args;
+        new_args
     }
 }

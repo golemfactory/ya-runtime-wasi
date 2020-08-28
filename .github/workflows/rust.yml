@@ -40,16 +40,17 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: build
+        args: --all
     - name: Cargo test
       uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --features integration-tests
+        args: --all --features integration-tests
     - run: rustup component add clippy
       if: matrix.os == 'linux'
     - uses: actions-rs/clippy-check@v1
       if: matrix.os == 'linux'
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-        args: --all-features
+        args: --all --all-features
 

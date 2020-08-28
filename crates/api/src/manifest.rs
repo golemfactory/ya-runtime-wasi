@@ -79,9 +79,9 @@ impl WasmImage {
             .entry_points
             .iter()
             .find(|entry| entry.id == entrypoint_id)
-            .map(|entry| entry.clone());
+            .cloned();
 
-        Ok(entrypoint.ok_or(anyhow!("Entrypoint {} not found.", entrypoint_id))?)
+        Ok(entrypoint.ok_or_else(|| anyhow!("Entrypoint {} not found.", entrypoint_id))?)
     }
 
     pub fn load_binary(&mut self, entrypoint: &EntryPoint) -> Result<Vec<u8>> {
@@ -98,7 +98,8 @@ impl WasmImage {
 
         let mut bytes = vec![];
         entry.read_to_end(&mut bytes)?;
-        return Ok(bytes);
+
+        Ok(bytes)
     }
 
     pub fn path(&self) -> &Path {

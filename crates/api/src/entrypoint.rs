@@ -22,7 +22,9 @@ pub fn start(workdir: impl AsRef<Path>) -> Result<()> {
 
     wasmtime.load_binaries(&mut image)?;
 
-    Ok(info!("Validation completed."))
+    info!("Validation completed.");
+
+    Ok(())
 }
 
 /// Instantiates and executes the deployed image using Wasmtime runtime.
@@ -67,7 +69,9 @@ pub fn run(
     wasmtime.load_binary(&mut image, &entrypoint)?;
     wasmtime.run(entrypoint, args.into_iter().collect())?;
 
-    Ok(info!("Computations completed."))
+    info!("Computations completed.");
+
+    Ok(())
 }
 
 pub(crate) struct DirectoryMount {

@@ -65,7 +65,8 @@ impl DeployFile {
             )
         })?);
         let deploy = serde_json::from_reader(reader)?;
-        return Ok(deploy);
+
+        Ok(deploy)
     }
 
     pub(crate) fn save(&self, work_dir: impl AsRef<Path>) -> Result<()> {
@@ -121,7 +122,7 @@ pub struct ContainerVolume {
 /// Takes path to workdir and path to the Wasm image as arguments.
 ///
 /// ## Example
-/// 
+///
 /// ```rust,no_run
 /// use std::path::Path;
 /// use ya_runtime_wasi::deploy;
