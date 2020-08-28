@@ -1,5 +1,7 @@
-use crate::entrypoint::DirectoryMount;
-use crate::manifest::{EntryPoint, WasmImage};
+use crate::{
+    entrypoint::DirectoryMount,
+    manifest::{EntryPoint, WasmImage},
+};
 
 use wasi_common::{self, preopen_dir, WasiCtxBuilder};
 use wasmtime::{Linker, Module, Store, Trap};
@@ -7,8 +9,7 @@ use wasmtime_wasi::Wasi;
 
 use anyhow::{anyhow, bail, Context, Result};
 use log::info;
-use std::collections::HashMap;
-use std::fs::File;
+use std::{collections::HashMap, fs::File};
 
 pub(crate) struct Wasmtime {
     linker: Linker,
@@ -29,9 +30,7 @@ impl Wasmtime {
             modules,
         }
     }
-}
 
-impl Wasmtime {
     pub fn load_binaries(&mut self, mut image: &mut WasmImage) -> Result<()> {
         // Loading binary will validate if it can be correctly loaded by wasmtime.
         for entrypoint in &image.list_entrypoints() {

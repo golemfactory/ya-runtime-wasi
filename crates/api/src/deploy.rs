@@ -1,22 +1,48 @@
 use crate::manifest::WasmImage;
-use anyhow::Context;
+
+use std::{
+    borrow::Cow,
+    path::{Path, PathBuf},
+    {fs, io},
+};
+
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
-use std::path::{Path, PathBuf};
-use std::{fs, io};
 use uuid::Uuid;
 
+/// Represents deployed Yagna Wasm image with set up volumes inside the
+/// container.
+///
+/// A handle to the deployed image can be obtained after [`ya_runtime_wasi::deploy`]
+/// command was executed, however, then the image will not have been yet validated. To
+/// obtain a handle to a validated image you must run [`ya_runtime_wasi::start`] first.
+///
+/// [`ya_runtime_wasi::deploy`]: fn.deploy.html
+/// [`ya_runtime_wasi::start`]: fn.start.html
+///
+/// ## Example
+///
+/// ```rust,no_run
+/// use std::path::Path;
+/// use ya_runtime_wasi::{deploy, DeployFile, start};
+///
+/// deploy(Path::new("workspace"), Path::new("package.zip")).unwrap();
+/// let not_validated = DeployFile::load(Path::new("workspace")).unwrap();
+///
+/// start(Path::new("workspace")).unwrap();
+/// let validated = DeployFile::load(Path::new("workspace")).unwrap();
+/// ```
 #[derive(Serialize, Deserialize)]
 pub struct DeployFile {
-    pub image_path: PathBuf,
-    pub vols: Vec<ContainerVolume>,
+    image_path: PathBuf,
+    vols: Vec<ContainerVolume>,
 }
 
 impl DeployFile {
-    pub fn for_image(image: &WasmImage) -> anyhow::Result<Self> {
+    fn for_image(image: &WasmImage) -> Result<Self> {
         let image_path = image.path().to_owned();
         let vols = image
-            .manifest()
+            .manifest
             .mount_points
             .iter()
             .map(|mount_point| ContainerVolume {
@@ -27,14 +53,11 @@ impl DeployFile {
         Ok(DeployFile { image_path, vols })
     }
 
-    pub fn save(&self, work_dir: &Path) -> anyhow::Result<()> {
-        let deploy_file = deploy_path(work_dir);
-        fs::write(&deploy_file, serde_json::to_vec(&self)?)?;
-        Ok(())
-    }
-
-    pub fn load(work_dir: &Path) -> anyhow::Result<Self> {
-        let deploy_file = deploy_path(work_dir);
+    /// Loads deployed image from workspace where [`ya_runtime_wasi::deploy`] was executed.
+    ///
+    /// [`ya_runtime_wasi::deploy`]: fn.deploy.html
+    pub fn load(work_dir: impl AsRef<Path>) -> Result<Self> {
+        let deploy_file = deploy_path(work_dir.as_ref());
         let reader = io::BufReader::new(fs::File::open(&deploy_file).with_context(|| {
             format!(
                 "Can't read deploy file {}. Did you run deploy command?",
@@ -45,11 +68,28 @@ impl DeployFile {
         return Ok(deploy);
     }
 
-    pub fn create_dirs(&self, work_dir: &Path) -> anyhow::Result<()> {
+    pub(crate) fn save(&self, work_dir: impl AsRef<Path>) -> Result<()> {
+        let deploy_file = deploy_path(work_dir.as_ref());
+        fs::write(&deploy_file, serde_json::to_vec(&self)?)?;
+        Ok(())
+    }
+
+    pub(crate) fn create_dirs(&self, work_dir: impl AsRef<Path>) -> Result<()> {
+        let work_dir = work_dir.as_ref();
         for vol in &self.vols {
             fs::create_dir(work_dir.join(&vol.name))?;
         }
         Ok(())
+    }
+
+    /// Returns path to the deployed image.
+    pub fn image_path(&self) -> &Path {
+        &self.image_path
+    }
+
+    /// Returns an iterator over mapped container volumes.
+    pub fn vols(&self) -> impl Iterator<Item = &ContainerVolume> {
+        self.vols.iter()
     }
 }
 
@@ -65,50 +105,41 @@ fn absolute_path(path: &str) -> Cow<'_, str> {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct DeployResult {
-    pub valid: Result<String, String>,
-    #[serde(default)]
-    pub vols: Vec<ContainerVolume>,
-    #[serde(default)]
-    pub start_mode: StartMode,
-}
-
+/// Represents name and path to the mapped volume in the container.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerVolume {
+    /// Volume name
     pub name: String,
+
+    /// Path to the volume inside the container
     pub path: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub enum StartMode {
-    Empty,
-    Blocking,
-}
+/// Deploys the Wasm image into the workspace.
+///
+/// Takes path to workdir and path to the Wasm image as arguments.
+///
+/// ## Example
+/// 
+/// ```rust,no_run
+/// use std::path::Path;
+/// use ya_runtime_wasi::deploy;
+///
+/// deploy(Path::new("workspace"), Path::new("package.zig")).unwrap();
+/// ```
+pub fn deploy(workdir: impl AsRef<Path>, path: impl AsRef<Path>) -> Result<()> {
+    let workdir = workdir.as_ref();
+    let path = path.as_ref();
 
-impl Default for StartMode {
-    fn default() -> Self {
-        StartMode::Empty
-    }
-}
-
-pub fn deploy(workdir: &Path, path: &Path) -> anyhow::Result<()> {
     let image = WasmImage::new(&path)
         .with_context(|| format!("Can't read image file {}.", path.display()))?;
     let deploy_file = DeployFile::for_image(&image)?;
     deploy_file.save(workdir)?;
     deploy_file.create_dirs(workdir)?;
 
-    let result = DeployResult {
-        valid: Ok(format!("Deploy completed.")),
-        vols: deploy_file.vols.clone(),
-        start_mode: StartMode::Empty,
-    };
-
-    log::info!("{}", serde_json::to_string_pretty(&result)?);
+    log::info!("Deploy completed");
+    log::info!("Volumes = {:#?}", deploy_file.vols);
 
     Ok(())
 }

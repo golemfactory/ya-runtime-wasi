@@ -67,15 +67,13 @@ fn rust_wasi_tutorial() -> Result<()> {
         let deployment = DeployFile::load(workspace).unwrap();
 
         let input_vol = deployment
-            .vols
-            .iter()
+            .vols()
             .find(|vol| vol.path.starts_with("/input"))
             .map(|vol| workspace.join(&vol.name))
             .unwrap();
 
         let output_vol = deployment
-            .vols
-            .iter()
+            .vols()
             .find(|vol| vol.path.starts_with("/output"))
             .map(|vol| workspace.join(&vol.name))
             .unwrap();

@@ -7,7 +7,7 @@ use zip::ZipArchive;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "kebab-case")]
-pub struct Manifest {
+pub(crate) struct Manifest {
     /// Deployment id in url like form.
     pub id: String,
     pub name: String,
@@ -23,14 +23,14 @@ pub struct Manifest {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
-pub struct EntryPoint {
+pub(crate) struct EntryPoint {
     pub id: String,
     pub wasm_path: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
-pub enum MountPoint {
+pub(crate) enum MountPoint {
     Ro(String),
     Rw(String),
     Wo(String),
@@ -46,18 +46,18 @@ impl MountPoint {
     }
 }
 
-pub struct WasmImage {
+pub(crate) struct WasmImage {
     archive: ZipArchive<File>,
-    manifest: Manifest,
+    pub manifest: Manifest,
     image_path: PathBuf,
 }
 
 impl WasmImage {
-    pub fn new(image_path: &Path) -> Result<WasmImage> {
+    pub fn new(image_path: &Path) -> Result<Self> {
         let mut archive = zip::ZipArchive::new(OpenOptions::new().read(true).open(image_path)?)?;
         let manifest = WasmImage::load_manifest(&mut archive)?;
 
-        Ok(WasmImage {
+        Ok(Self {
             image_path: image_path.to_owned(),
             archive,
             manifest,
@@ -67,10 +67,6 @@ impl WasmImage {
     fn load_manifest(archive: &mut ZipArchive<File>) -> Result<Manifest> {
         let entry = archive.by_name("manifest.json")?;
         Ok(serde_json::from_reader(entry)?)
-    }
-
-    pub fn manifest(&self) -> &Manifest {
-        &self.manifest
     }
 
     pub fn list_entrypoints(&self) -> Vec<EntryPoint> {

@@ -20,9 +20,10 @@
 //! use ya_runtime_wasi::*;
 //!
 //! // In this example, we assume that `package.zip` contains a WASI binary
-//! // called `hello.wasm`, and maps input/output to `/workdir`
+//! // called `hello.wasm` which also our entrypoint into the package, and
+//! // maps input/output to `/workdir`
 //! let workspace = Path::new("workspace");
-//! let module_name = "hello.wasm";
+//! let entrypoint = "hello";
 //! let package = Path::new("package.zip");
 //!
 //! // Deploy package
@@ -34,13 +35,23 @@
 //! // Execute the binary
 //! run(
 //!     &workspace,
-//!     &module_name,
+//!     &entrypoint,
 //!     vec![
-//!         "/workdir/input".to_string(),
-//!         "/workdir/output".to_string(),
+//!         "/workdir/input".into(),
+//!         "/workdir/output".into(),
 //!     ],
 //! ).unwrap();
 //! ```
+//!
+//! ## Obtaining handle to the deployed image
+//!
+//! A handle to the deployed image, i.e., the path to the image as well as a list of mapped
+//! container volumes, can be obtained using [`DeployFile::load`] function invoked
+//! after [`ya_runtime_wasi::deploy`] and [`ya_runtime_wasi::start`] were run.
+//!
+//! [`DeployFile::load`]: struct.DeployFile.html#method.load
+//! [`ya_runtime_wasi::deploy`]: fn.deploy.html
+//! [`ya_runtime_wasi::start`]: fn.start.html
 //!
 //! ## Examples
 //!
@@ -49,13 +60,12 @@
 //!
 //! [`gfaas`]: https://github.com/golemfactory/gfaas
 
-// #![deny(missing_docs)]
+#![deny(missing_docs)]
 
 mod deploy;
 mod entrypoint;
 mod manifest;
 mod wasmtime_unit;
 
-pub use deploy::{deploy, DeployFile, ContainerVolume};
+pub use deploy::{deploy, ContainerVolume, DeployFile};
 pub use entrypoint::{run, start};
-pub use manifest::{EntryPoint, Manifest, MountPoint};
