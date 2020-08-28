@@ -1,4 +1,4 @@
-//#![cfg(feature = "integration-tests")]
+#![cfg(feature = "integration-tests")]
 
 use anyhow::{Context, Result};
 use std::mem::ManuallyDrop;
