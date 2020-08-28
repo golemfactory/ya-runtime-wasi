@@ -108,6 +108,7 @@ pub fn deploy(workdir: &Path, path: &Path) -> anyhow::Result<()> {
         start_mode: StartMode::Empty,
     };
 
-    println!("{}", serde_json::to_string_pretty(&result)?);
+    log::info!("{}", serde_json::to_string_pretty(&result)?);
+
     Ok(())
 }
