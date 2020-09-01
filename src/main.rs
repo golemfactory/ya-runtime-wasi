@@ -1,12 +1,30 @@
-mod deploy;
-mod entrypoint;
-mod manifest;
-mod wasmtime_unit;
+use std::{env, path::PathBuf};
 
-use crate::entrypoint::{entrypoint, CmdArgs};
 use anyhow::Result;
-use std::env;
 use structopt::StructOpt;
+use ya_runtime_wasi::{deploy, run, start};
+
+#[derive(StructOpt)]
+enum Commands {
+    Deploy {},
+    Start {},
+    Run {
+        #[structopt(short = "e", long = "entrypoint")]
+        entrypoint: String,
+        args: Vec<String>,
+    },
+}
+
+#[derive(StructOpt)]
+#[structopt(rename_all = "kebab-case")]
+struct CmdArgs {
+    #[structopt(short, long)]
+    workdir: PathBuf,
+    #[structopt(short, long)]
+    task_package: PathBuf,
+    #[structopt(subcommand)]
+    command: Commands,
+}
 
 fn main() -> Result<()> {
     let our_rust_log = "cranelift_wasm=warn,cranelift_codegen=info,wasi_common=info";
@@ -16,6 +34,10 @@ fn main() -> Result<()> {
     };
     env_logger::init();
 
-    let cmdargs = CmdArgs::from_args();
-    Ok(entrypoint(cmdargs)?)
+    let cmdline = CmdArgs::from_args();
+    match cmdline.command {
+        Commands::Run { entrypoint, args } => run(&cmdline.workdir, &entrypoint, args),
+        Commands::Deploy {} => deploy(&cmdline.workdir, &cmdline.task_package),
+        Commands::Start {} => start(&cmdline.workdir),
+    }
 }

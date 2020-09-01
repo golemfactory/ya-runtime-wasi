@@ -66,9 +66,9 @@ mod integration_tests {
         let mut zip = ZipWriter::new(w);
         let options = FileOptions::default().compression_method(CompressionMethod::Stored);
         zip.start_file("manifest.json", options)?;
-        zip.write(&manifest)?;
+        zip.write_all(&manifest)?;
         zip.start_file(format!("{}.wasm", pkg_name), options)?;
-        zip.write(&wasm_binary)?;
+        zip.write_all(&wasm_binary)?;
         let w = zip.finish()?;
         fs::write(out_dir.join(format!("{}.zip", pkg_name)), w.into_inner())?;
 

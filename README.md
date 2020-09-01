@@ -1,4 +1,4 @@
-# Yagna-Wasmtime integration
+# Yagna WASI runtime
 ![Continuous integration](https://github.com/golemfactory/ya-runtime-wasi/workflows/Continuous%20integration/badge.svg)
 
 `ya-runtime-wasi` is a [`Yagna`] plugin that allows the provider to execute WASI modules
@@ -10,18 +10,20 @@ zipped WASI modules according to some included manifest file.
 
 ## Building
 
-Building the project is very straightforward:
+Building the plugin is very straightforward:
 
 ```
 cargo build
 ```
 
-If you decide to make some tweaks and would like to test if everything still behaves
+If you decide to make some tweaks to the [API] and would like to test if everything still behaves
 as expected, you can trigger included end-to-end integration tests. Make sure you have
 `wasm32-wasi` target installed (`rustup target add wasm32-wasi`) and then run:
 
+[API]: crates/api
+
 ```
-cargo test --features integration-tests
+cargo test --all --features ya-runtime-wasi/integration-tests
 ```
 
 Note that running the end-to-end tests requires you to have `wasm32-wasi` target installed.
