@@ -67,5 +67,5 @@ mod entrypoint;
 mod manifest;
 mod wasmtime_unit;
 
-pub use deploy::{deploy, ContainerVolume, DeployFile};
+pub use deploy::{deploy, DeployFile};
 pub use entrypoint::{run, start};
