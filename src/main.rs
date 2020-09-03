@@ -37,7 +37,11 @@ fn main() -> Result<()> {
     let cmdline = CmdArgs::from_args();
     match cmdline.command {
         Commands::Run { entrypoint, args } => run(&cmdline.workdir, &entrypoint, args),
-        Commands::Deploy {} => deploy(&cmdline.workdir, &cmdline.task_package),
+        Commands::Deploy {} => {
+            let res = deploy(&cmdline.workdir, &cmdline.task_package)?;
+            println!("{}\n", serde_json::to_string(&res)?);
+            Ok(())
+        }
         Commands::Start {} => start(&cmdline.workdir),
     }
 }

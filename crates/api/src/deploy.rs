@@ -119,7 +119,7 @@ fn absolute_path(path: &str) -> Cow<'_, str> {
 ///
 /// deploy(Path::new("workspace"), Path::new("package.zig")).unwrap();
 /// ```
-pub fn deploy(workdir: impl AsRef<Path>, path: impl AsRef<Path>) -> Result<()> {
+pub fn deploy(workdir: impl AsRef<Path>, path: impl AsRef<Path>) -> Result<deploy::DeployResult> {
     let workdir = workdir.as_ref();
     let path = path.as_ref();
 
@@ -135,7 +135,5 @@ pub fn deploy(workdir: impl AsRef<Path>, path: impl AsRef<Path>) -> Result<()> {
         start_mode: Default::default(),
     };
 
-    println!("{}\n", serde_json::to_string(&res)?);
-
-    Ok(())
+    Ok(res)
 }
