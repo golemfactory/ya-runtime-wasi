@@ -9,6 +9,7 @@ use std::{
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use ya_runtime_api::deploy;
 
 /// Represents deployed Yagna Wasm image with set up volumes inside the
 /// container.
@@ -35,7 +36,7 @@ use uuid::Uuid;
 #[derive(Serialize, Deserialize)]
 pub struct DeployFile {
     image_path: PathBuf,
-    vols: Vec<ContainerVolume>,
+    vols: Vec<deploy::ContainerVolume>,
 }
 
 impl DeployFile {
@@ -45,7 +46,7 @@ impl DeployFile {
             .manifest
             .mount_points
             .iter()
-            .map(|mount_point| ContainerVolume {
+            .map(|mount_point| deploy::ContainerVolume {
                 name: format!("vol-{}", Uuid::new_v4()),
                 path: absolute_path(mount_point.path()).into(),
             })
@@ -89,7 +90,7 @@ impl DeployFile {
     }
 
     /// Returns an iterator over mapped container volumes.
-    pub fn vols(&self) -> impl Iterator<Item = &ContainerVolume> {
+    pub fn vols(&self) -> impl Iterator<Item = &deploy::ContainerVolume> {
         self.vols.iter()
     }
 }
@@ -106,17 +107,6 @@ fn absolute_path(path: &str) -> Cow<'_, str> {
     }
 }
 
-/// Represents name and path to the mapped volume in the container.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct ContainerVolume {
-    /// Volume name
-    pub name: String,
-
-    /// Path to the volume inside the container
-    pub path: String,
-}
-
 /// Deploys the Wasm image into the workspace.
 ///
 /// Takes path to workdir and path to the Wasm image as arguments.
@@ -129,7 +119,7 @@ pub struct ContainerVolume {
 ///
 /// deploy(Path::new("workspace"), Path::new("package.zig")).unwrap();
 /// ```
-pub fn deploy(workdir: impl AsRef<Path>, path: impl AsRef<Path>) -> Result<()> {
+pub fn deploy(workdir: impl AsRef<Path>, path: impl AsRef<Path>) -> Result<deploy::DeployResult> {
     let workdir = workdir.as_ref();
     let path = path.as_ref();
 
@@ -139,8 +129,11 @@ pub fn deploy(workdir: impl AsRef<Path>, path: impl AsRef<Path>) -> Result<()> {
     deploy_file.save(workdir)?;
     deploy_file.create_dirs(workdir)?;
 
-    log::info!("Deploy completed");
-    log::info!("Volumes = {:#?}", deploy_file.vols);
+    let res = deploy::DeployResult {
+        valid: Ok(Default::default()),
+        vols: deploy_file.vols,
+        start_mode: Default::default(),
+    };
 
-    Ok(())
+    Ok(res)
 }
