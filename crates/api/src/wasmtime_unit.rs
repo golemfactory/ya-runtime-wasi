@@ -4,7 +4,7 @@ use crate::{
 };
 
 use wasi_common::{self, preopen_dir, WasiCtxBuilder};
-use wasmtime::{Linker, Module, Store, Trap};
+use wasmtime::{Engine, Linker, Module, Store, Strategy, Trap};
 use wasmtime_wasi::Wasi;
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -20,7 +20,15 @@ pub(crate) struct Wasmtime {
 
 impl Wasmtime {
     pub fn new(mounts: Vec<DirectoryMount>) -> Self {
-        let store = Store::default();
+        let mut config = wasmtime::Config::new();
+        if let Err(e) = config
+            .static_memory_maximum_size(536_870_912)
+            .strategy(Strategy::Lightbeam)
+        {
+            log::error!("faile to set compilation strategy: {}", e);
+        }
+        let engine = Engine::new(&config);
+        let store = Store::new(&engine);
         let linker = Linker::new(&store);
         let modules = HashMap::new();
 
