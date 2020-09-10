@@ -1,4 +1,4 @@
-use crate::manifest::WasmImage;
+use crate::manifest::{MountPoint, WasmImage};
 
 use std::{
     borrow::Cow,
@@ -10,6 +10,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use ya_runtime_api::deploy;
+use ya_runtime_api::deploy::ContainerVolume;
 
 /// Represents deployed Yagna Wasm image with set up volumes inside the
 /// container.
@@ -36,21 +37,24 @@ use ya_runtime_api::deploy;
 #[derive(Serialize, Deserialize)]
 pub struct DeployFile {
     image_path: PathBuf,
-    vols: Vec<deploy::ContainerVolume>,
+    vols: Vec<(bool, deploy::ContainerVolume)>,
 }
 
 impl DeployFile {
     fn for_image(image: &WasmImage) -> Result<Self> {
         let image_path = image.path().to_owned();
-        let vols = image
-            .manifest
-            .mount_points
-            .iter()
-            .map(|mount_point| deploy::ContainerVolume {
-                name: format!("vol-{}", Uuid::new_v4()),
-                path: absolute_path(mount_point.path()).into(),
-            })
-            .collect();
+        let convert = |mount_point| {
+            (
+                MountPoint::is_private(mount_point),
+                deploy::ContainerVolume {
+                    name: format!("vol-{}", Uuid::new_v4()),
+                    path: absolute_path(mount_point.path()).into(),
+                },
+            )
+        };
+
+        let vols = image.manifest.mount_points.iter().map(convert).collect();
+
         Ok(DeployFile { image_path, vols })
     }
 
@@ -78,7 +82,7 @@ impl DeployFile {
 
     pub(crate) fn create_dirs(&self, work_dir: impl AsRef<Path>) -> Result<()> {
         let work_dir = work_dir.as_ref();
-        for vol in &self.vols {
+        for (_, vol) in &self.vols {
             fs::create_dir(work_dir.join(&vol.name))?;
         }
         Ok(())
@@ -90,8 +94,19 @@ impl DeployFile {
     }
 
     /// Returns an iterator over mapped container volumes.
-    pub fn vols(&self) -> impl Iterator<Item = &deploy::ContainerVolume> {
-        self.vols.iter()
+    pub fn public_vols<'a>(&'a self) -> impl Iterator<Item = deploy::ContainerVolume> + 'a {
+        self.vols
+            .iter()
+            .filter(|(prv, _)| !prv)
+            .map(|(_, v)| ContainerVolume {
+                name: v.name.clone(),
+                path: v.path.clone(),
+            })
+    }
+
+    /// Returns an iterator over mapped container volumes.
+    pub fn container_vols(&self) -> impl Iterator<Item = &deploy::ContainerVolume> {
+        self.vols.iter().map(|(_, v)| v)
     }
 }
 
@@ -131,7 +146,7 @@ pub fn deploy(workdir: impl AsRef<Path>, path: impl AsRef<Path>) -> Result<deplo
 
     let res = deploy::DeployResult {
         valid: Ok(Default::default()),
-        vols: deploy_file.vols,
+        vols: deploy_file.public_vols().collect(),
         start_mode: Default::default(),
     };
 

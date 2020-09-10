@@ -330,12 +330,12 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-channel"
-version = "0.4.3"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09ee0cc8804d5393478d743b035099520087a5186f3b93fa58cec08fa62407b6"
+checksum = "b153fe7cbef478c567df0f972e02e6d736db11affe43dfc9c56a9374d1adfb87"
 dependencies = [
- "cfg-if",
  "crossbeam-utils",
+ "maybe-uninit",
 ]
 
 [[package]]
@@ -687,12 +687,9 @@ checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 
 [[package]]
 name = "hashbrown"
-version = "0.8.2"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e91b62f79061a0bc2e046024cb7ba44b08419ed238ecbd9adbd787434b9e8c25"
-dependencies = [
- "autocfg",
-]
+checksum = "00d63df3d41950fb462ed38308eea019113ad1508da725bbedcd0fa5a85ef5f7"
 
 [[package]]
 name = "heck"
@@ -723,9 +720,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "1.5.2"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e47a3566dd4fd4eec714ae6ceabdee0caec795be835c223d92c2d40f1e8cf1c"
+checksum = "55e2e4c765aa53a0424761bf9f41aa7a6ac1efa87238f59560640e27fca028f2"
 dependencies = [
  "autocfg",
  "hashbrown",
@@ -1073,9 +1070,9 @@ checksum = "eba180dafb9038b050a4c280019bbedf9f2467b61e5d892dcad585bb57aadc5a"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.19"
+version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04f5f085b5d71e2188cb8271e5da0161ad52c3f227a661a3c135fdf28e258b12"
+checksum = "175c513d55719db99da20232b06cda8bab6b83ec2d04e3283edf0213c37c1a29"
 dependencies = [
  "unicode-xid",
 ]
@@ -1336,26 +1333,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
 
 [[package]]
-name = "scroll"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "abb2332cb595d33f7edd5700f4cbf94892e680c7f0ae56adab58a35190b66cb1"
-dependencies = [
- "scroll_derive",
-]
-
-[[package]]
-name = "scroll_derive"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e367622f934864ffa1c704ba2b82280aab856e3d8213c84c5720257eb34b15b9"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "semver"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1485,9 +1462,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.39"
+version = "1.0.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "891d8d6567fe7c7f8835a3a98af4208f3846fba258c1bc3c31d6e506239f11f9"
+checksum = "963f7d3cc59b59b9325165add223142bbf1df27655d07789f109896d353d8350"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1751,7 +1728,6 @@ dependencies = [
  "wasmtime-jit",
  "wasmtime-profiling",
  "wasmtime-runtime",
- "wat",
  "winapi 0.3.9",
 ]
 
@@ -1835,11 +1811,8 @@ checksum = "323ace0650e2d46ee5f16211f927017fa1cbcdc4d0deffe8f89e4fdb42beb5a5"
 dependencies = [
  "anyhow",
  "cfg-if",
- "gimli 0.21.0",
  "lazy_static",
  "libc",
- "object 0.18.0",
- "scroll",
  "serde",
  "target-lexicon",
  "wasmtime-environ",
@@ -1888,24 +1861,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe1220ed7f824992b426a76125a3403d048eaf0f627918e97ade0d9b9d510d20"
 dependencies = [
  "leb128",
-]
-
-[[package]]
-name = "wast"
-version = "23.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26b080a48623c1b15193eac2e28c7b8d0e6b2e1c6c67ed46ddcd86063e78e504"
-dependencies = [
- "leb128",
-]
-
-[[package]]
-name = "wat"
-version = "1.0.24"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c350d7431aa486488d28cdf75b57d59c02fab9cde20d93c52424510afe18ecc"
-dependencies = [
- "wast 23.0.0",
 ]
 
 [[package]]
@@ -2030,7 +1985,7 @@ dependencies = [
  "anyhow",
  "log",
  "thiserror",
- "wast 22.0.0",
+ "wast",
 ]
 
 [[package]]
@@ -2046,7 +2001,7 @@ dependencies = [
 [[package]]
 name = "ya-runtime-api"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/yagna.git#bc20c98e37bfe1febd4f143d9aa44aaa7d64cf7d"
+source = "git+https://github.com/golemfactory/yagna.git#70b07791912321d1cf4855e4ffe73850bff14dd5"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2084,7 +2039,8 @@ name = "ya-runtime-wasi-cli"
 version = "0.2.1"
 dependencies = [
  "anyhow",
- "env_logger 0.6.2",
+ "env_logger 0.7.1",
+ "log",
  "serde_json",
  "structopt",
  "ya-runtime-wasi",

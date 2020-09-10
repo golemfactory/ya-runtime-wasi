@@ -85,7 +85,7 @@ fn create_wasmtime(
     deploy: &DeployFile,
 ) -> Result<Wasmtime> {
     let mounts = deploy
-        .vols()
+        .container_vols()
         .map(|v| {
             let host = workdir.join(&v.name);
             let guest = PathBuf::from(&v.path);
