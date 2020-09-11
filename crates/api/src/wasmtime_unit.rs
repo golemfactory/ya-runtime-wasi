@@ -7,6 +7,7 @@ use wasi_common::{self, preopen_dir, WasiCtxBuilder};
 use wasmtime::{Engine, Linker, Module, OptLevel, Store, Trap};
 use wasmtime_wasi::Wasi;
 
+use crate::entrypoint::RuntimeOptions;
 use anyhow::{anyhow, bail, Context, Result};
 use log::info;
 use std::{collections::HashMap, fs::File};
@@ -19,17 +20,29 @@ pub(crate) struct Wasmtime {
 }
 
 impl Wasmtime {
-    pub fn new(mounts: Vec<DirectoryMount>) -> Self {
-        let store = if cfg!(feature = "sgx") {
+    pub fn new(mounts: Vec<DirectoryMount>, options: RuntimeOptions) -> Self {
+        let store = if options.is_default() {
+            Store::default()
+        } else {
             let mut config = wasmtime::Config::new();
-            config.static_memory_maximum_size(536_870_912);
-            config.cranelift_opt_level(OptLevel::None);
-            config.debug_info(false);
-            config.interruptable(false);
+            if let Some(max_memory_size) = options.max_memory {
+                config.static_memory_maximum_size(max_memory_size);
+            }
+            if let Some(optimize) = options.optimize {
+                config.cranelift_opt_level(if optimize {
+                    OptLevel::Speed
+                } else {
+                    OptLevel::None
+                });
+            }
+            if options.sgx_profile.unwrap_or(false) {
+                config.static_memory_guard_size(0x1_0000);
+                config.debug_info(false);
+                config.interruptable(false);
+            }
+
             let engine = Engine::new(&config);
             Store::new(&engine)
-        } else {
-            Store::default()
         };
 
         let linker = Linker::new(&store);

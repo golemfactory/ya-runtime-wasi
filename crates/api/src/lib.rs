@@ -60,7 +60,7 @@
 //!
 //! [`gfaas`]: https://github.com/golemfactory/gfaas
 
-#![deny(missing_docs)]
+//#![deny(missing_docs)]
 
 mod deploy;
 mod entrypoint;
@@ -68,4 +68,4 @@ mod manifest;
 mod wasmtime_unit;
 
 pub use deploy::{deploy, DeployFile};
-pub use entrypoint::{run, start};
+pub use entrypoint::{run, start, RuntimeOptions};

@@ -2,7 +2,7 @@ use std::{env, path::PathBuf};
 
 use anyhow::Result;
 use structopt::StructOpt;
-use ya_runtime_wasi::{deploy, run, start};
+use ya_runtime_wasi::{deploy, run, start, RuntimeOptions};
 
 #[derive(StructOpt)]
 enum Commands {
@@ -36,12 +36,14 @@ fn main() -> Result<()> {
 
     let cmdline = CmdArgs::from_args();
     match cmdline.command {
-        Commands::Run { entrypoint, args } => run(&cmdline.workdir, &entrypoint, args),
+        Commands::Run { entrypoint, args } => {
+            RuntimeOptions::from_env()?.run(&cmdline.workdir, &entrypoint, args)
+        }
         Commands::Deploy {} => {
             let res = deploy(&cmdline.workdir, &cmdline.task_package)?;
             println!("{}\n", serde_json::to_string(&res)?);
             Ok(())
         }
-        Commands::Start {} => start(&cmdline.workdir),
+        Commands::Start {} => RuntimeOptions::from_env()?.start(&cmdline.workdir),
     }
 }
