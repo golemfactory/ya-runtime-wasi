@@ -3,7 +3,8 @@
         "name": "wasmtime",
         "supervisor-path": "exe-unit",
         "runtime-path": "ya-runtime-wasi",
-        "description" : "wasmtime wasi runtime"
+        "description" : "wasmtime wasi runtime",
+	"version": "0.1.0"
     }
 ]
 

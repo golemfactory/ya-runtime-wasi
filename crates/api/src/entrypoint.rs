@@ -10,9 +10,10 @@ const INIT_MEM_VAR: &str = "YA_RUNTIME_WASI_INIT_MEM";
 const OPTIMIZE_VAR: &str = "YA_RUNTIME_WASI_OPT";
 const SGX_VAR: &str = "YA_RUNTIME_WASI_SGX";
 
+/// [Yagna] WASI runtime configuration.
 #[derive(Default, Clone, Debug)]
 pub struct RuntimeOptions {
-    pub(crate) max_memory: Option<u64>,
+    pub(crate) max_static_memory: Option<u64>,
     pub(crate) optimize: Option<bool>,
     pub(crate) sgx_profile: Option<bool>,
 }
@@ -20,7 +21,7 @@ pub struct RuntimeOptions {
 impl RuntimeOptions {
     /** Initializes runtime options from environment variables.
      *
-     * * `YA_RUNTIME_WASI_MAX_MEM` - maximum memory size. (supported formats 250m, 1.2g)
+     * * `YA_RUNTIME_WASI_INIT_MEM` - maximum memory size. (supported formats 250m, 1.2g)
      * * `YA_RUNTIME_WASI_OPT` - optimization. (0|no for no optimalization), (1|yes)
      * * `YA_RUNTIME_WASI_SGX` - enables sgx profiled configuration.
      */
@@ -40,7 +41,7 @@ impl RuntimeOptions {
                 Ok(val) => val,
                 Err(e) => return Some(format!("invalid max mem spec: {} ({})", mem_str, e)),
             };
-            me.max_memory = Some(value * scale);
+            me.max_static_memory = Some(value * scale);
             None
         })() {
             log::warn!("wasi env MAX_MEM_VAR {}", err_msg);
@@ -64,28 +65,38 @@ impl RuntimeOptions {
         Ok(me)
     }
 
-    /**
-     *
+    /** Configures the maximum size, in bytes, where a linear memory is
+     * considered static, above which it'll be considered dynamic.
      */
-    pub fn with_max_memory(mut self, max_mamory: impl Into<Option<u64>>) -> Self {
-        self.max_memory = max_mamory.into();
+    pub fn with_static_memory(mut self, max_mamory: impl Into<Option<u64>>) -> Self {
+        self.max_static_memory = max_mamory.into();
         self
     }
 
+    /**
+     * Changes default optimization level.
+     *
+     *  * `true` - optimization for speed.
+     *  * `false` - no optimization.
+     *
+     */
     pub fn with_optimize(mut self, optimize: bool) -> Self {
         self.optimize = Some(optimize);
         self
     }
 
+    /** Enables configuration for Graphene-SGX.
+     */
     pub fn with_sgx_profile(mut self, sgx_profile: bool) -> Self {
         self.sgx_profile = Some(sgx_profile);
         self
     }
 
     pub(crate) fn is_default(&self) -> bool {
-        self.max_memory.is_none() && self.optimize.is_none() && self.sgx_profile.is_none()
+        self.max_static_memory.is_none() && self.optimize.is_none() && self.sgx_profile.is_none()
     }
 
+    /// Instantiates and executes the deployed image using Wasmtime runtime.
     pub fn run(
         self,
         workdir: impl AsRef<Path>,
@@ -115,6 +126,7 @@ impl RuntimeOptions {
         Ok(())
     }
 
+    /// Validates the deployed image.
     pub fn start(self, workdir: impl AsRef<Path>) -> Result<()> {
         let workdir = workdir.as_ref();
         let deploy_file = DeployFile::load(workdir)?;
@@ -249,6 +261,6 @@ mod tests {
         env::set_var(INIT_MEM_VAR, "250m");
         let options = RuntimeOptions::from_env().unwrap();
 
-        assert_eq!(options.max_memory, Some(250 * 0x100_000));
+        assert_eq!(options.max_static_memory, Some(250 * 0x100_000));
     }
 }

@@ -25,8 +25,8 @@ impl Wasmtime {
             Store::default()
         } else {
             let mut config = wasmtime::Config::new();
-            if let Some(max_memory_size) = options.max_memory {
-                config.static_memory_maximum_size(max_memory_size);
+            if let Some(max_static_memory) = options.max_static_memory {
+                config.static_memory_maximum_size(max_static_memory);
             }
             if let Some(optimize) = options.optimize {
                 config.cranelift_opt_level(if optimize {

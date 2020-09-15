@@ -2043,6 +2043,7 @@ dependencies = [
  "log",
  "serde_json",
  "structopt",
+ "tempfile",
  "ya-runtime-wasi",
 ]
 

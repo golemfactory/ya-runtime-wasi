@@ -1,8 +1,8 @@
-use std::{env, path::PathBuf};
+use std::path::PathBuf;
 
 use anyhow::Result;
 use structopt::StructOpt;
-use ya_runtime_wasi::{deploy, run, start, RuntimeOptions};
+use ya_runtime_wasi::{deploy, RuntimeOptions};
 
 #[derive(StructOpt)]
 enum Commands {
@@ -22,19 +22,28 @@ struct CmdArgs {
     workdir: PathBuf,
     #[structopt(short, long)]
     task_package: PathBuf,
+    #[structopt(long)]
+    debug: bool,
     #[structopt(subcommand)]
     command: Commands,
 }
 
 fn main() -> Result<()> {
-    let our_rust_log = "cranelift_wasm=warn,cranelift_codegen=info,wasi_common=info";
-    match env::var("RUST_LOG") {
-        Err(_) => env::set_var("RUST_LOG", our_rust_log),
-        Ok(var) => env::set_var("RUST_LOG", format!("{},{}", var, our_rust_log)),
-    };
-    env_logger::init();
-
     let cmdline = CmdArgs::from_args();
+
+    env_logger::from_env("YA_WASI_LOG")
+        .filter(Some("cranelift_codegen"), log::LevelFilter::Error)
+        .filter(Some("cranelift_wasm"), log::LevelFilter::Error)
+        .filter(
+            Some("wasi_common"),
+            if cmdline.debug {
+                log::LevelFilter::Info
+            } else {
+                log::LevelFilter::Error
+            },
+        )
+        .init();
+
     match cmdline.command {
         Commands::Run { entrypoint, args } => {
             RuntimeOptions::from_env()?.run(&cmdline.workdir, &entrypoint, args)

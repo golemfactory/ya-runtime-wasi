@@ -25,6 +25,9 @@ serde_json = "1"
 structopt = "0.3"
 ya-runtime-wasi = { path = "crates/api", version = "0.2" }
 
+[dev-dependencies]
+tempfile = "3.1.0"
+
 [profile.release]
 codegen-units = 1
 lto = true
@@ -37,4 +40,5 @@ exclude = [
 ]
 
 [features]
-sgx=["ya-runtime-wasi/sgx", "log/release_max_level_info"]
+sgx=["ya-runtime-wasi/sgx", "log/release_max_level_error"]
+integration-tests=['ya-runtime-wasi/integration-tests']

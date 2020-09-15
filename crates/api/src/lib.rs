@@ -60,7 +60,7 @@
 //!
 //! [`gfaas`]: https://github.com/golemfactory/gfaas
 
-//#![deny(missing_docs)]
+#![deny(missing_docs)]
 
 mod deploy;
 mod entrypoint;

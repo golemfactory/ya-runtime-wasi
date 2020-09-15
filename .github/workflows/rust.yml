@@ -21,6 +21,8 @@ jobs:
           - windows
     steps:
     - uses: actions/checkout@v1
+      with:
+        lfs: true
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
@@ -45,7 +47,7 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --all --features ya-runtime-wasi/integration-tests
+        args: --all --features integration-tests
     - run: rustup component add clippy
       if: matrix.os == 'linux'
     - uses: actions-rs/clippy-check@v1
