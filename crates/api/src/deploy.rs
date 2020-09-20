@@ -94,6 +94,12 @@ impl DeployFile {
     }
 
     /// Returns an iterator over mapped container volumes.
+    #[deprecated = "use [`public_vols`](#method.public_vols) or [`container_vols`](#method.container_vols) instead"]
+    pub fn vols(&self) -> impl Iterator<Item = &deploy::ContainerVolume> {
+        self.container_vols()
+    }
+
+    /// Returns an iterator over non private mapped container volumes.
     pub fn public_vols<'a>(&'a self) -> impl Iterator<Item = deploy::ContainerVolume> + 'a {
         self.vols
             .iter()

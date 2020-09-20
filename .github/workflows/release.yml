@@ -141,4 +141,4 @@ jobs:
           asset_path: ./releases/${{ steps.pack.outputs.artifact }}
           asset_name: ${{ steps.pack.outputs.artifact }}
           asset_content_type: ${{ steps.pack.outputs.media }}
-          
+

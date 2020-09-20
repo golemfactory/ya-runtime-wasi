@@ -1,6 +1,6 @@
 name: Continuous integration
 
-on: 
+on:
   push:
     branches:
       - master
@@ -38,7 +38,7 @@ jobs:
       with:
         path: target
         key: os-${{ runner.os }}-cargo-target
-    - name: Cargo build 
+    - name: Cargo build
       uses: actions-rs/cargo@v1
       with:
         command: build

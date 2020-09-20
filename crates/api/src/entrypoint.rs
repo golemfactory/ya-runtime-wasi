@@ -10,7 +10,7 @@ const INIT_MEM_VAR: &str = "YA_RUNTIME_WASI_INIT_MEM";
 const OPTIMIZE_VAR: &str = "YA_RUNTIME_WASI_OPT";
 const SGX_VAR: &str = "YA_RUNTIME_WASI_SGX";
 
-/// [Yagna] WASI runtime configuration.
+/// WASI runtime configuration.
 #[derive(Default, Clone, Debug)]
 pub struct RuntimeOptions {
     pub(crate) max_static_memory: Option<u64>,
@@ -19,12 +19,12 @@ pub struct RuntimeOptions {
 }
 
 impl RuntimeOptions {
-    /** Initializes runtime options from environment variables.
-     *
-     * * `YA_RUNTIME_WASI_INIT_MEM` - maximum memory size. (supported formats 250m, 1.2g)
-     * * `YA_RUNTIME_WASI_OPT` - optimization. (0|no for no optimalization), (1|yes)
-     * * `YA_RUNTIME_WASI_SGX` - enables sgx profiled configuration.
-     */
+    /// Initializes runtime options from environment variables.
+    ///
+    /// * `YA_RUNTIME_WASI_INIT_MEM` - maximum memory size. (supported formats 250m, 1.2g)
+    /// * `YA_RUNTIME_WASI_OPT` - optimization. (0|no for no optimalization), (1|yes)
+    /// * `YA_RUNTIME_WASI_SGX` - enables sgx profiled configuration.
+    ///
     pub fn from_env() -> Result<Self> {
         let mut me = Self::default();
 
@@ -65,28 +65,25 @@ impl RuntimeOptions {
         Ok(me)
     }
 
-    /** Configures the maximum size, in bytes, where a linear memory is
-     * considered static, above which it'll be considered dynamic.
-     */
+    /// Configures the maximum size, in bytes, where a linear memory is
+    /// considered static, above which it'll be considered dynamic.
+    ///
     pub fn with_static_memory(mut self, max_mamory: impl Into<Option<u64>>) -> Self {
         self.max_static_memory = max_mamory.into();
         self
     }
 
-    /**
-     * Changes default optimization level.
-     *
-     *  * `true` - optimization for speed.
-     *  * `false` - no optimization.
-     *
-     */
+    /// Changes default optimization level.
+    ///
+    /// * `true` - optimization for speed.
+    /// * `false` - no optimization.
+    ///
     pub fn with_optimize(mut self, optimize: bool) -> Self {
         self.optimize = Some(optimize);
         self
     }
 
-    /** Enables configuration for Graphene-SGX.
-     */
+    /// Enables configuration for Graphene-SGX.
     pub fn with_sgx_profile(mut self, sgx_profile: bool) -> Self {
         self.sgx_profile = Some(sgx_profile);
         self
