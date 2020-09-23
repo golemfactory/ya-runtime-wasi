@@ -16,6 +16,7 @@ assets = [
     ["target/release/ya-runtime-wasi", "usr/lib/yagna/plugins/", "755"],
     ["conf/ya-runtime-wasi.json", "usr/lib/yagna/plugins/", "644"]
 ]
+depends="libgcc1, libc6"
 
 [dependencies]
 anyhow = "1.0.19"
