@@ -68,4 +68,4 @@ mod manifest;
 mod wasmtime_unit;
 
 pub use deploy::{deploy, DeployFile};
-pub use entrypoint::{run, start};
+pub use entrypoint::{run, start, RuntimeOptions};

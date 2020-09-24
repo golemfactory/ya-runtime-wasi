@@ -34,6 +34,7 @@ pub(crate) enum MountPoint {
     Ro(String),
     Rw(String),
     Wo(String),
+    Private(String),
 }
 
 impl MountPoint {
@@ -42,6 +43,14 @@ impl MountPoint {
             MountPoint::Ro(path) => path,
             MountPoint::Rw(path) => path,
             MountPoint::Wo(path) => path,
+            MountPoint::Private(path) => path,
+        }
+    }
+
+    pub fn is_private(&self) -> bool {
+        match self {
+            MountPoint::Private(_) => true,
+            _ => false,
         }
     }
 }
