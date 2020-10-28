@@ -4,9 +4,10 @@ use crate::{
 };
 
 use wasi_common::{self, preopen_dir, WasiCtxBuilder};
-use wasmtime::{Linker, Module, Store, Trap};
+use wasmtime::{Engine, Linker, Module, OptLevel, Store, Trap};
 use wasmtime_wasi::Wasi;
 
+use crate::entrypoint::RuntimeOptions;
 use anyhow::{anyhow, bail, Context, Result};
 use log::info;
 use std::{collections::HashMap, fs::File};
@@ -19,8 +20,31 @@ pub(crate) struct Wasmtime {
 }
 
 impl Wasmtime {
-    pub fn new(mounts: Vec<DirectoryMount>) -> Self {
-        let store = Store::default();
+    pub fn new(mounts: Vec<DirectoryMount>, options: RuntimeOptions) -> Self {
+        let store = if options.is_default() {
+            Store::default()
+        } else {
+            let mut config = wasmtime::Config::new();
+            if let Some(max_static_memory) = options.max_static_memory {
+                config.static_memory_maximum_size(max_static_memory);
+            }
+            if let Some(optimize) = options.optimize {
+                config.cranelift_opt_level(if optimize {
+                    OptLevel::Speed
+                } else {
+                    OptLevel::None
+                });
+            }
+            if options.sgx_profile.unwrap_or(false) {
+                config.static_memory_guard_size(0x1_0000);
+                config.debug_info(false);
+                config.interruptable(false);
+            }
+
+            let engine = Engine::new(&config);
+            Store::new(&engine)
+        };
+
         let linker = Linker::new(&store);
         let modules = HashMap::new();
 

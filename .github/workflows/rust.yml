@@ -1,6 +1,6 @@
 name: Continuous integration
 
-on: 
+on:
   push:
     branches:
       - master
@@ -21,6 +21,8 @@ jobs:
           - windows
     steps:
     - uses: actions/checkout@v1
+      with:
+        lfs: true
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
@@ -36,7 +38,7 @@ jobs:
       with:
         path: target
         key: os-${{ runner.os }}-cargo-target
-    - name: Cargo build 
+    - name: Cargo build
       uses: actions-rs/cargo@v1
       with:
         command: build
@@ -45,7 +47,7 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --all --features ya-runtime-wasi/integration-tests
+        args: --all --features integration-tests
     - run: rustup component add clippy
       if: matrix.os == 'linux'
     - uses: actions-rs/clippy-check@v1
