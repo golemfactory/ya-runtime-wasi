@@ -1,13 +1,19 @@
-use crate::{Allocator, AsMem};
+use super::{Allocator, AsMem};
+use secp256k1::SharedSecret;
 pub use secp256k1::{Error, Message, PublicKey, SecretKey};
+use std::convert::TryInto;
 use std::fmt;
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
 use tiny_keccak::{Hasher, Keccak};
 use wasmtime::{Caller, Linker, Trap};
 
 pub struct EthHash([u8; 32]);
 
 impl EthHash {
+    pub fn parse_slice(bytes: &[u8]) -> anyhow::Result<Self> {
+        Ok(EthHash(bytes.try_into()?))
+    }
+
     pub fn personal_message(message: impl AsRef<[u8]>) -> EthHash {
         let message = message.as_ref();
         let msg_size = message.len().to_string();
@@ -171,6 +177,13 @@ impl RecoverableSignature {
         format!("{}{:02x}", hex::encode(sig.as_ref()), r)
     }
 
+    pub fn serialize_rpc(&self) -> [u8; 65] {
+        let mut output = [0u8; 65];
+        output[0..64].copy_from_slice(&self.signature.serialize());
+        output[64] = (self.recovery_id.serialize() & 1) + 27;
+        output
+    }
+
     pub fn from_hex(mut hex: &str) -> Result<Self, Error> {
         if hex.starts_with("0x") {
             hex = &hex[2..];
@@ -198,6 +211,7 @@ pub fn link_eth(module: &str, linker: &mut Linker) -> anyhow::Result<()> {
             //Ok(ptr)
         },
     )?;
+
     linker.func(
         module,
         "eth.prvToAddress",
@@ -208,6 +222,104 @@ pub fn link_eth(module: &str, linker: &mut Linker) -> anyhow::Result<()> {
             let ptr = a.new_string(&secret.to_eth_address().to_hex_string())?;
             a.retain(ptr)?;
             Ok(ptr)
+        },
+    )?;
+
+    linker.func(
+        module,
+        "eth.pubToAddress",
+        |caller: Caller, ptr: u32| -> Result<u32, Trap> {
+            let mem = AsMem::for_caller(&caller)?;
+            let public_key = mem.decode_pubkey(ptr)?;
+            let mut allocator = Allocator::for_caller(&caller)?;
+            let ptr = allocator.new_string(&public_key.to_eth_address().to_hex_string())?;
+            allocator.retain(ptr)?;
+            Ok(ptr)
+        },
+    )?;
+
+    //export function sign(pk: ArrayBuffer, messageHash: ArrayBuffer): ArrayBuffer;
+    linker.func(
+        module,
+        "eth.sign",
+        |caller: Caller, pk_ptr: u32, hash_ptr: u32| -> Result<u32, Trap> {
+            let mem = AsMem::for_caller(&caller)?;
+            let pk = mem.decode_secret(pk_ptr)?;
+            let hash = mem.decode_hash(hash_ptr)?;
+            let bytes = hash.sign_by(&pk).serialize_rpc();
+            let mut allocator = Allocator::for_caller(&caller)?;
+            let out_ptr = allocator.new_bytes(&bytes)?;
+            allocator.retain(out_ptr)?;
+            Ok(out_ptr)
+        },
+    )?;
+
+    //export function keccak256(bytes : ArrayBuffer): ArrayBuffer;
+    linker.func(
+        module,
+        "eth.keccak256",
+        |caller: Caller, ptr: u32| -> Result<u32, Trap> {
+            let mem = AsMem::for_caller(&caller)?;
+            let hash = mem.decode(ptr, |slice| Ok(eth_hash_parts(&[slice])))?;
+            let mut allocator = Allocator::for_caller(&caller)?;
+            let out_ptr = allocator.new_bytes(hash.as_ref())?;
+            allocator.retain(out_ptr)?;
+            Ok(out_ptr)
+        },
+    )?;
+
+    //
+    // messageHash - 32 message hash,
+    // signarure - 32 bytes R, 32 bytes S, 1 byte recovery tag.
+    // returns 64 bytes public key.
+    //export function ecrecover(messageHash: ArrayBuffer, signature: ArrayBuffer): ArrayBuffer;
+    linker.func(
+        module,
+        "eth.ecrecover",
+        |caller: Caller, hash_ptr: u32, sig_ptr: u32| -> Result<u32, Trap> {
+            let mem = AsMem::for_caller(&caller)?;
+            let hash = mem.decode_hash(hash_ptr)?;
+            let sign = mem.decode(sig_ptr, |bytes| {
+                RecoverableSignature::from_bytes(bytes)
+                    .map_err(|e| Trap::new(format!("unable to parse signature: {}", e)))
+            })?;
+            let pub_key = sign
+                .recover_pub_key(&hash)
+                .map_err(|e| Trap::new(e.to_string()))?;
+            let mut allocator = Allocator::for_caller(&caller)?;
+            let out_ptr = allocator.new_bytes(pub_key.serialize().as_ref())?;
+            allocator.retain(out_ptr)?;
+            Ok(out_ptr)
+        },
+    )?;
+    //export function bytesToHex(bytes: ArrayBuffer): string;
+    linker.func(
+        module,
+        "eth.bytesToHex",
+        |caller: Caller, bytes_ptr: u32| -> Result<u32, Trap> {
+            let mem = AsMem::for_caller(&caller)?;
+            let hex_str = mem.decode(bytes_ptr, |bytes| Ok(hex::encode(bytes)))?;
+            let mut allocator = Allocator::for_caller(&caller)?;
+            let out_ptr = allocator.new_string(&hex_str)?;
+            allocator.retain(out_ptr)?;
+            Ok(out_ptr)
+        },
+    )?;
+
+    //export function sharedSecret(prvKey: ArrayBuffer, pubKey: ArrayBuffer): ArrayBuffer;
+    linker.func(
+        module,
+        "eth.sharedSecret",
+        |caller: Caller, prv_ptr: u32, pub_ptr: u32| -> Result<u32, Trap> {
+            let mem = AsMem::for_caller(&caller)?;
+            let secret = mem.decode_secret(prv_ptr)?;
+            let pubkey = mem.decode_pubkey(pub_ptr)?;
+            let shared_secret: SharedSecret<sha2::Sha256> =
+                SharedSecret::new(&pubkey, &secret).map_err(|e| Trap::new(e.to_string()))?;
+            let mut allocator = Allocator::for_caller(&caller)?;
+            let out_ptr = allocator.new_bytes(shared_secret.as_ref())?;
+            allocator.retain(out_ptr)?;
+            Ok(out_ptr)
         },
     )?;
 

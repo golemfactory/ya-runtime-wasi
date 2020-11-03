@@ -1,11 +1,11 @@
 use secp256k1::PublicKey;
-use std::collections::HashMap;
+
 use std::convert::TryFrom;
 use std::fs;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use wasmtime::{Caller, ExportType, ImportType, Linker, Module, Store, Trap};
-use ya_runtime_aswasm::{link_eth, Allocator, AsMem};
+use ya_runtime_aswasm::runtime::{link_eth, link_io, Allocator, AsMem};
 
 #[derive(StructOpt)]
 enum Commands {
@@ -72,6 +72,7 @@ impl RunCommand {
             },
         )?;
         link_eth("ya", &mut linker)?;
+        link_io("ya", &mut linker, PathBuf::from("/tmp/w"), Vec::new())?;
 
         linker.func(
             "ya",
@@ -88,7 +89,7 @@ impl RunCommand {
 
         let app = linker.instantiate(&module).unwrap();
         let f = app.get_func(self.command.as_str()).unwrap();
-        let rv = f.call(&[])?;
+        let _rv = f.call(&[])?;
         Ok(())
     }
 }
