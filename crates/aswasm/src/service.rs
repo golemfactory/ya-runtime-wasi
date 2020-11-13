@@ -211,7 +211,7 @@ pub fn spawn_application(work_dir: PathBuf) -> ApplicationChannel {
         match handle.await {
             Err(e) => log::error!("crash: {}", e),
             Ok(Err(e)) => log::error!("crash: {:?}", e),
-            Ok(Ok(v)) => log::info!("shutdown"),
+            Ok(Ok(())) => log::info!("shutdown"),
         }
     });
     tx
