@@ -23,9 +23,11 @@ anyhow = "1.0.19"
 env_logger = "0.7"
 log = "0.4.11"
 serde_json = "1"
+serde = { version = "1", features = [ "derive" ] }
 structopt = "0.3"
-ya-runtime-wasi = { path = "crates/api", version = "0.2" }
-ya-runtime-aswasm = { path = "crates/aswasm", version="0.1" }
+ya-runtime-wasi = { path = "crates/api", version = "0.2", optional = true }
+ya-runtime-aswasm = { path = "crates/aswasm", version="0.1", optional = true }
+zip="0.5"
 
 [dev-dependencies]
 tempfile = "3.1.0"
@@ -42,5 +44,8 @@ exclude = [
 ]
 
 [features]
+default=["wasi"]
 sgx=["ya-runtime-wasi/sgx", "log/release_max_level_error"]
+wasi=["ya-runtime-wasi"]
+aswasm=["ya-runtime-aswasm", "log/release_max_level_error"]
 integration-tests=['ya-runtime-wasi/integration-tests']

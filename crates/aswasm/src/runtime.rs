@@ -1,6 +1,6 @@
 use secp256k1::{PublicKey, SecretKey};
 use std::convert::TryFrom;
-use wasmtime::{Caller, Func, Memory, Trap};
+use wasmtime::{Caller, Func, Instance, Memory, Trap};
 mod eth;
 mod io;
 
@@ -31,7 +31,16 @@ impl AsMem {
         Ok(Self { mem })
     }
 
-    pub fn decode_str(&self, ptr: u32) -> Result<String> {
+    pub fn for_instance(instance: &Instance) -> Result<Self> {
+        let mem = instance
+            .get_export("memory")
+            .ok_or_else(|| Trap::new("missing memory export"))?
+            .into_memory()
+            .ok_or_else(|| Trap::new("wrong object exported as \"memory\""))?;
+        Ok(Self { mem })
+    }
+
+    pub fn decode_str(&self, ptr: i32) -> Result<String> {
         let chars: Vec<u16> = unsafe {
             let bytes = self.get_ptr(ptr)?;
             bytes
@@ -42,28 +51,28 @@ impl AsMem {
         Ok(String::from_utf16_lossy(&chars))
     }
 
-    pub fn decode_secret(&self, ptr: u32) -> Result<SecretKey> {
+    pub fn decode_secret(&self, ptr: i32) -> Result<SecretKey> {
         unsafe { SecretKey::parse_slice(self.get_ptr(ptr)?).map_err(|e| Trap::new(e.to_string())) }
     }
 
-    pub fn decode<T, F: FnOnce(&[u8]) -> Result<T>>(&self, ptr: u32, extractor: F) -> Result<T> {
+    pub fn decode<T, F: FnOnce(&[u8]) -> Result<T>>(&self, ptr: i32, extractor: F) -> Result<T> {
         unsafe { extractor(self.get_ptr(ptr)?) }
     }
 
-    pub fn decode_hash(&self, ptr: u32) -> Result<eth::EthHash> {
+    pub fn decode_hash(&self, ptr: i32) -> Result<eth::EthHash> {
         unsafe {
             eth::EthHash::parse_slice(self.get_ptr(ptr)?)
                 .map_err(|e| Trap::new(format!("invalid message hash: {}", e)))
         }
     }
 
-    pub fn decode_pubkey(&self, ptr: u32) -> Result<PublicKey> {
+    pub fn decode_pubkey(&self, ptr: i32) -> Result<PublicKey> {
         unsafe {
             PublicKey::parse_slice(self.get_ptr(ptr)?, None).map_err(|e| Trap::new(e.to_string()))
         }
     }
 
-    unsafe fn get_ptr(&self, ptr: u32) -> Result<&[u8]> {
+    unsafe fn get_ptr(&self, ptr: i32) -> Result<&[u8]> {
         let ptr = ptr as usize;
         let m = self.mem.data_unchecked();
         if ptr < 4 {
@@ -74,7 +83,7 @@ impl AsMem {
         Ok(&m[ptr..(ptr + size)])
     }
 
-    unsafe fn get_mut_ptr(&mut self, ptr: u32) -> Result<&mut [u8]> {
+    unsafe fn get_mut_ptr(&mut self, ptr: i32) -> Result<&mut [u8]> {
         let ptr = ptr as usize;
         let m = self.mem.data_unchecked_mut();
         if ptr < 4 {
@@ -113,21 +122,41 @@ impl Allocator {
         })
     }
 
-    pub fn new_bytes_int(&mut self, bytes: &[u8], type_id: u32) -> Result<u32> {
-        let ptr: u32 = self.f_new.get2()?(bytes.len() as u32, type_id)?;
+    pub fn for_instance(caller: &Instance) -> Result<Self> {
+        let mem = AsMem::for_instance(caller)?;
+        let f_new = caller
+            .get_export("__new")
+            .ok_or_else(|| Trap::new("Missing '__new' export"))?
+            .into_func()
+            .ok_or_else(|| Trap::new("invalid __new"))?;
+        let f_retain = caller
+            .get_export("__retain")
+            .ok_or_else(|| Trap::new("Missing '__retain' export"))?
+            .into_func()
+            .ok_or_else(|| Trap::new("invalid __retain"))?;
+
+        Ok(Self {
+            mem,
+            f_new,
+            f_retain,
+        })
+    }
+
+    pub fn new_bytes_int(&mut self, bytes: &[u8], type_id: u32) -> Result<i32> {
+        let ptr: i32 = self.f_new.get2()?(bytes.len() as i32, type_id)?;
         unsafe {
             self.mem.get_mut_ptr(ptr)?.copy_from_slice(bytes);
         }
         Ok(ptr)
     }
 
-    pub fn new_bytes(&mut self, bytes: &[u8]) -> Result<u32> {
+    pub fn new_bytes(&mut self, bytes: &[u8]) -> Result<i32> {
         self.new_bytes_int(bytes, ARRAYBUFFER_ID)
     }
 
-    pub fn new_string(&mut self, s: &str) -> Result<u32> {
+    pub fn new_string(&mut self, s: &str) -> Result<i32> {
         let v: Vec<u16> = s.encode_utf16().collect();
-        let ptr: u32 = self.f_new.get2()?(v.len() as u32 * 2u32, STRING_ID)?;
+        let ptr: i32 = self.f_new.get2()?(v.len() as u32 * 2u32, STRING_ID)?;
         unsafe {
             for (chunk, [c0, c1]) in self
                 .mem
@@ -146,7 +175,7 @@ impl Allocator {
         self.mem.mem.data_size() as usize
     }
 
-    pub fn retain(&self, ptr: u32) -> Result<u32> {
+    pub fn retain(&self, ptr: i32) -> Result<i32> {
         self.f_retain.get1()?(ptr)
     }
 }

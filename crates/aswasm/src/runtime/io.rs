@@ -79,7 +79,7 @@ impl FdStateInner {
             ));
         }
         for vol in &self.vols {
-            assert!(vol.path.ends_with("/"));
+            assert!(vol.path.ends_with('/'));
             if path.starts_with(&vol.path) {
                 let tail = &path[vol.path.len()..];
                 return Ok(Some(self.base_dir.join(&vol.name).join(tail)));
@@ -174,7 +174,7 @@ pub fn link_io(
         linker.func(
             module,
             "io.wopen",
-            move |caller: Caller, path_ptr: u32| -> Result<i32, Trap> {
+            move |caller: Caller, path_ptr: i32| -> Result<i32, Trap> {
                 let mem = AsMem::for_caller(&caller)?;
                 let path = mem.decode_str(path_ptr)?;
                 decode_result(state.open_write(&path))
@@ -187,7 +187,7 @@ pub fn link_io(
         linker.func(
             module,
             "io.ropen",
-            move |caller: Caller, path_ptr: u32| -> Result<i32, Trap> {
+            move |caller: Caller, path_ptr: i32| -> Result<i32, Trap> {
                 let mem = AsMem::for_caller(&caller)?;
                 let path = mem.decode_str(path_ptr)?;
                 decode_result(state.open_read(&path))
@@ -200,7 +200,7 @@ pub fn link_io(
         linker.func(
             module,
             "io.read",
-            move |caller: Caller, fd: i32, buffer: u32| -> Result<i32, Trap> {
+            move |caller: Caller, fd: i32, buffer: i32| -> Result<i32, Trap> {
                 let mut mem = AsMem::for_caller(&caller)?;
                 unsafe { decode_result(state.read(fd, mem.get_mut_ptr(buffer)?)) }
             },
@@ -212,7 +212,7 @@ pub fn link_io(
         linker.func(
             module,
             "io.write",
-            move |caller: Caller, fd: i32, buffer: u32| -> Result<i32, Trap> {
+            move |caller: Caller, fd: i32, buffer: i32| -> Result<i32, Trap> {
                 let mem = AsMem::for_caller(&caller)?;
                 unsafe { decode_result(state.write(fd, mem.get_ptr(buffer)?)) }
             },
@@ -220,7 +220,7 @@ pub fn link_io(
     }
 
     {
-        let state = state.clone();
+        // let state = state.clone();
         linker.func(
             module,
             "io.close",

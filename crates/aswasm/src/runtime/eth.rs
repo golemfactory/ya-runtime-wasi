@@ -21,7 +21,7 @@ impl EthHash {
         eth_hash_parts(&[prefix.as_ref(), msg_size.as_ref(), message])
     }
 
-    pub fn new(signature: &str) -> EthHashBuilder {
+    pub fn build_with(signature: &str) -> EthHashBuilder {
         let sig = signature_hash(signature);
         let mut hasher = Keccak::v256();
         hasher.update(sig.as_ref());
@@ -202,7 +202,7 @@ pub fn link_eth(module: &str, linker: &mut Linker) -> anyhow::Result<()> {
     linker.func(
         module,
         "eth.newKey",
-        |caller: Caller| -> Result<u32, Trap> {
+        |caller: Caller| -> Result<i32, Trap> {
             let mut a = Allocator::for_caller(&caller)?;
             let secret = secp256k1::SecretKey::random(&mut rand::thread_rng());
             let ptr = a.new_bytes(secret.serialize().as_ref())?;
@@ -215,7 +215,7 @@ pub fn link_eth(module: &str, linker: &mut Linker) -> anyhow::Result<()> {
     linker.func(
         module,
         "eth.prvToAddress",
-        |caller: Caller, ptr: u32| -> Result<u32, Trap> {
+        |caller: Caller, ptr: i32| -> Result<i32, Trap> {
             let mem = AsMem::for_caller(&caller)?;
             let secret = mem.decode_secret(ptr)?;
             let mut a = Allocator::for_caller(&caller)?;
@@ -228,7 +228,7 @@ pub fn link_eth(module: &str, linker: &mut Linker) -> anyhow::Result<()> {
     linker.func(
         module,
         "eth.pubToAddress",
-        |caller: Caller, ptr: u32| -> Result<u32, Trap> {
+        |caller: Caller, ptr: i32| -> Result<i32, Trap> {
             let mem = AsMem::for_caller(&caller)?;
             let public_key = mem.decode_pubkey(ptr)?;
             let mut allocator = Allocator::for_caller(&caller)?;
@@ -242,7 +242,7 @@ pub fn link_eth(module: &str, linker: &mut Linker) -> anyhow::Result<()> {
     linker.func(
         module,
         "eth.sign",
-        |caller: Caller, pk_ptr: u32, hash_ptr: u32| -> Result<u32, Trap> {
+        |caller: Caller, pk_ptr: i32, hash_ptr: i32| -> Result<i32, Trap> {
             let mem = AsMem::for_caller(&caller)?;
             let pk = mem.decode_secret(pk_ptr)?;
             let hash = mem.decode_hash(hash_ptr)?;
@@ -258,7 +258,7 @@ pub fn link_eth(module: &str, linker: &mut Linker) -> anyhow::Result<()> {
     linker.func(
         module,
         "eth.keccak256",
-        |caller: Caller, ptr: u32| -> Result<u32, Trap> {
+        |caller: Caller, ptr: i32| -> Result<i32, Trap> {
             let mem = AsMem::for_caller(&caller)?;
             let hash = mem.decode(ptr, |slice| Ok(eth_hash_parts(&[slice])))?;
             let mut allocator = Allocator::for_caller(&caller)?;
@@ -276,7 +276,7 @@ pub fn link_eth(module: &str, linker: &mut Linker) -> anyhow::Result<()> {
     linker.func(
         module,
         "eth.ecrecover",
-        |caller: Caller, hash_ptr: u32, sig_ptr: u32| -> Result<u32, Trap> {
+        |caller: Caller, hash_ptr: i32, sig_ptr: i32| -> Result<i32, Trap> {
             let mem = AsMem::for_caller(&caller)?;
             let hash = mem.decode_hash(hash_ptr)?;
             let sign = mem.decode(sig_ptr, |bytes| {
@@ -296,7 +296,7 @@ pub fn link_eth(module: &str, linker: &mut Linker) -> anyhow::Result<()> {
     linker.func(
         module,
         "eth.bytesToHex",
-        |caller: Caller, bytes_ptr: u32| -> Result<u32, Trap> {
+        |caller: Caller, bytes_ptr: i32| -> Result<i32, Trap> {
             let mem = AsMem::for_caller(&caller)?;
             let hex_str = mem.decode(bytes_ptr, |bytes| Ok(hex::encode(bytes)))?;
             let mut allocator = Allocator::for_caller(&caller)?;
@@ -310,7 +310,7 @@ pub fn link_eth(module: &str, linker: &mut Linker) -> anyhow::Result<()> {
     linker.func(
         module,
         "eth.sharedSecret",
-        |caller: Caller, prv_ptr: u32, pub_ptr: u32| -> Result<u32, Trap> {
+        |caller: Caller, prv_ptr: i32, pub_ptr: i32| -> Result<i32, Trap> {
             let mem = AsMem::for_caller(&caller)?;
             let secret = mem.decode_secret(prv_ptr)?;
             let pubkey = mem.decode_pubkey(pub_ptr)?;
