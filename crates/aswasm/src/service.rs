@@ -2,6 +2,7 @@ use crate::deploy::{Deployment, Output};
 use crate::runtime::{link_eth, link_io, AsMem};
 use futures::prelude::*;
 use futures::FutureExt;
+use rand::Rng;
 use std::cell::RefCell;
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
@@ -77,6 +78,9 @@ impl Application {
                 Err(Trap::new(message))
             },
         )?;
+        linker.func("env", "seed", |_: Caller| -> Result<f64, Trap> {
+            Ok(rand::thread_rng().gen())
+        })?;
         //linker.define("ya", "context", Extern)
         linker.func(
             "ya",
@@ -241,8 +245,10 @@ impl<T: RuntimeEvent + 'static> RuntimeService for Service<T> {
         future::ok("0.1.0".to_string()).boxed_local()
     }
 
-    fn run_process(&self, run: RunProcess) -> AsyncResponse<'_, RunProcessResp> {
+    fn run_process(&self, mut run: RunProcess) -> AsyncResponse<'_, RunProcessResp> {
         let pid = self.pid.fetch_add(1, Ordering::SeqCst);
+        // drop argv0
+        run.args.remove(0);
 
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         if let Err(_e) = self.application.send(Command {
