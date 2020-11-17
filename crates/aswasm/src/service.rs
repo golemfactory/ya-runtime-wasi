@@ -146,18 +146,23 @@ pub struct Command {
     pub status: futures::channel::mpsc::UnboundedSender<ProcessStatus>,
 }
 
-struct SenderHandler(futures::channel::mpsc::UnboundedSender<ProcessStatus>);
+struct SenderHandler {
+    pub pid: u64,
+    pub sender: futures::channel::mpsc::UnboundedSender<ProcessStatus>,
+}
 
 impl OutputHandler for SenderHandler {
     fn handle_stdout(&self, message: &[u8]) {
-        let _ = self.0.unbounded_send(ProcessStatus {
+        let _ = self.sender.unbounded_send(ProcessStatus {
+            pid: self.pid,
             stdout: message.into(),
             ..ProcessStatus::default()
         });
     }
 
     fn handle_stderr(&self, message: &[u8]) {
-        let _ = self.0.unbounded_send(ProcessStatus {
+        let _ = self.sender.unbounded_send(ProcessStatus {
+            pid: self.pid,
             stderr: message.into(),
             ..ProcessStatus::default()
         });
@@ -165,10 +170,11 @@ impl OutputHandler for SenderHandler {
 }
 
 pub fn with_sender<T, F: FnOnce() -> T>(
+    pid: u64,
     sender: futures::channel::mpsc::UnboundedSender<ProcessStatus>,
     f: F,
 ) -> T {
-    let prev_handler = OUTPUT_HADLER.with(|h| h.replace(Box::new(SenderHandler(sender))));
+    let prev_handler = OUTPUT_HADLER.with(|h| h.replace(Box::new(SenderHandler { pid, sender })));
     let ret = f();
     let _ = OUTPUT_HADLER.with(|h| h.replace(prev_handler));
     ret
@@ -186,7 +192,7 @@ pub fn spawn_application(work_dir: PathBuf) -> ApplicationChannel {
             let pid = command.pid as u64;
 
             log::debug!("command pid:{}, ep:{}", pid, &command.entry_point);
-            match with_sender(command.status.clone(), || {
+            match with_sender(pid, command.status.clone(), || {
                 app.run(&command.entry_point, command.args)
             }) {
                 Ok(return_code) => {
@@ -252,7 +258,7 @@ impl<T: RuntimeEvent + 'static> RuntimeService for Service<T> {
 
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         if let Err(_e) = self.application.send(Command {
-            pid: 0,
+            pid: pid as u32,
             entry_point: run.bin,
             args: run.args,
             status: tx,
