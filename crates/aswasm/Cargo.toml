@@ -15,7 +15,7 @@ anyhow = "1"
 log = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-wasmtime = { version = "0.18", default-features = false }
+wasmtime = { version = "0.20", default-features = false }
 ya-runtime-api = { version = "0.1", git = "https://github.com/golemfactory/yagna.git", features=["codec"] }
 futures="0.3"
 tokio= { version = "0.2", features=["rt-core", "rt-threaded", "blocking"]}

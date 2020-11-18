@@ -15,15 +15,15 @@ anyhow = "1"
 log = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-wasmtime-wasi = "0.18"
-wasi-common = "0.18"
+wasmtime-wasi = "0.20"
+wasi-common = "0.20"
 libc = "0.2"
 uuid = { version = "0.8", features = ["serde", "v4"] }
 ya-runtime-api = { version = "0.1", git = "https://github.com/golemfactory/yagna.git", features=["codec"] }
 zip="0.5"
 
 [dependencies.wasmtime]
-version = "0.18"
+version = "0.20"
 default-features=false
 
 [dev-dependencies]
