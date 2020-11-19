@@ -156,6 +156,7 @@ impl OutputHandler for SenderHandler {
         let _ = self.sender.unbounded_send(ProcessStatus {
             pid: self.pid,
             stdout: message.into(),
+            running: true,
             ..ProcessStatus::default()
         });
     }
@@ -164,6 +165,7 @@ impl OutputHandler for SenderHandler {
         let _ = self.sender.unbounded_send(ProcessStatus {
             pid: self.pid,
             stderr: message.into(),
+            running: true,
             ..ProcessStatus::default()
         });
     }
