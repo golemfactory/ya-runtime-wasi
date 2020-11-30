@@ -36,7 +36,7 @@ jobs:
       uses: actions/cache@v1
       with:
         path: target
-        key: os-${{ runner.os }}-cargo-target
+        key: os-${{ runner.os }}-cargo-target-v1
     - name: Cargo build
       uses: actions-rs/cargo@v1
       with:
