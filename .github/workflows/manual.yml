@@ -20,7 +20,9 @@ jobs:
             ~/.cargo/git
             target
           key: os-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - run: |
+      - name: remove target
+        shell: bash
+        run: |
           rm -fr target
           mkdir target
 
