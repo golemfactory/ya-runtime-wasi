@@ -33,10 +33,13 @@ jobs:
         command: fmt
         args: --all -- --check
     - name: Cache
-      uses: actions/cache@v1
+      uses: actions/cache@v2
       with:
-        path: target
-        key: os-${{ runner.os }}-cargo-target-v1
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: os-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - name: Cargo build
       uses: actions-rs/cargo@v1
       with:
