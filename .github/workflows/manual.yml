@@ -17,7 +17,9 @@ jobs:
         with:
           path: target
           key: os-${{ runner.os }}-cargo-target
-      - run: |
+      - name: remove target
+        shell: bash
+        run: |
           rm -fr target
           mkdir target
 
