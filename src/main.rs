@@ -1,8 +1,62 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use serde::Deserialize;
+use serde_json;
+use std::fs::OpenOptions;
 use structopt::StructOpt;
-use ya_runtime_wasi::{deploy, RuntimeOptions};
+#[cfg(feature = "aswasm")]
+use ya_runtime_aswasm as aswasm;
+#[cfg(feature = "wasi")]
+use ya_runtime_wasi as wasi;
+
+#[derive(Deserialize)]
+enum RuntimeType {
+    #[serde(rename = "wasi")]
+    WASI,
+    #[serde(rename = "aswasm")]
+    ASWASM,
+}
+
+#[derive(Deserialize)]
+struct Manifest {
+    runtime: Option<RuntimeType>,
+}
+
+fn detect_runtime(task_package: &Path) -> anyhow::Result<RuntimeType> {
+    let mut package = zip::ZipArchive::new(OpenOptions::new().read(true).open(task_package)?)?;
+    let mut manifest_file = package.by_name("manifest.json")?;
+    let m: Manifest = serde_json::from_reader(&mut manifest_file)?;
+    Ok(m.runtime.unwrap_or(RuntimeType::WASI))
+}
+
+#[cfg(feature = "wasi")]
+macro_rules! with_wasi {
+    ($s:expr) => {{
+        $s
+    }};
+}
+
+#[cfg(feature = "aswasm")]
+macro_rules! with_aswasm {
+    ($s:expr) => {{
+        $s
+    }};
+}
+
+#[cfg(not(feature = "wasi"))]
+macro_rules! with_wasi {
+    ($s:expr) => {
+        unimplemented!()
+    };
+}
+
+#[cfg(not(feature = "aswasm"))]
+macro_rules! with_aswasm {
+    ($s:expr) => {
+        unimplemented!()
+    };
+}
 
 #[derive(StructOpt)]
 enum Commands {
@@ -44,15 +98,37 @@ fn main() -> Result<()> {
         )
         .init();
 
+    let runtime = detect_runtime(&cmdline.task_package)?;
+
     match cmdline.command {
-        Commands::Run { entrypoint, args } => {
-            RuntimeOptions::from_env()?.run(&cmdline.workdir, &entrypoint, args)
-        }
+        #[allow(unused_variables)]
+        Commands::Run { entrypoint, args } => match runtime {
+            RuntimeType::WASI => with_wasi!(wasi::RuntimeOptions::from_env()?.run(
+                &cmdline.workdir,
+                &entrypoint,
+                args
+            )),
+            RuntimeType::ASWASM => {
+                anyhow::bail!("aswasm is blocking engine, run op is not supported.")
+            }
+        },
         Commands::Deploy {} => {
-            let res = deploy(&cmdline.workdir, &cmdline.task_package)?;
+            let res = match runtime {
+                RuntimeType::WASI => {
+                    with_wasi!(wasi::deploy(&cmdline.workdir, &cmdline.task_package))
+                }
+                RuntimeType::ASWASM => {
+                    with_aswasm!(aswasm::deploy(&cmdline.workdir, &cmdline.task_package))
+                }
+            }?;
             println!("{}\n", serde_json::to_string(&res)?);
             Ok(())
         }
-        Commands::Start {} => RuntimeOptions::from_env()?.start(&cmdline.workdir),
+        Commands::Start {} => match runtime {
+            RuntimeType::WASI => {
+                with_wasi!(wasi::RuntimeOptions::from_env()?.start(&cmdline.workdir))
+            }
+            RuntimeType::ASWASM => with_aswasm!(aswasm::start(&cmdline.workdir)),
+        },
     }
 }

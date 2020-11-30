@@ -1,0 +1,23 @@
+name: Clear cache
+on: workflow_dispatch
+jobs:
+  clear-cache:
+    runs-on: ${{ matrix.os }}-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu
+          - macos
+          - windows
+    steps:
+      - uses: actions/checkout@v1
+      - name: Cache
+        uses: actions/cache@v1
+        with:
+          path: target
+          key: os-${{ runner.os }}-cargo-target
+      - run: |
+          rm -fr target
+          mkdir target
+

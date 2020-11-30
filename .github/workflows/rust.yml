@@ -14,6 +14,7 @@ jobs:
     name: Build
     runs-on: ${{ matrix.os }}-latest
     strategy:
+      fail-fast: false
       matrix:
         os:
           - ubuntu
@@ -26,8 +27,6 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
-        target: wasm32-wasi
-        components: rustfmt
     - name: Cargo fmt
       uses: actions-rs/cargo@v1
       with:
@@ -43,6 +42,10 @@ jobs:
       with:
         command: build
         args: --all
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        target: wasm32-wasi
     - name: Cargo test
       uses: actions-rs/cargo@v1
       with:
