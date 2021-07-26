@@ -1,6 +1,6 @@
+use anyhow::*;
 use serde_json::Value;
-use std::error::Error;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{env, fs};
 
 const DESCRIPTOR_PATH: &str = "conf/ya-runtime-wasi.json";
@@ -15,7 +15,7 @@ fn setup() {
 #[cfg(not(windows))]
 fn setup() {}
 
-fn update_descriptor() -> Result<(), Box<dyn Error>> {
+fn update_descriptor() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=conf/{}", DESCRIPTOR_PATH);
     let target_os = env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS");
     let exe_extension = if target_os == "windows" { ".exe" } else { "" };
@@ -50,17 +50,19 @@ fn update_descriptor() -> Result<(), Box<dyn Error>> {
             );
         }
     }
-    println!("cargo:warning={}", serde_json::to_string(&descriptors)?);
     let output_directory: PathBuf = env::var("CARGO_BUILD_TARGET_DIR")
         .ok()
-        .unwrap_or_else(|| "target/release".to_string())
-        .into();
+        .map(Into::into)
+        .unwrap_or_else(|| Path::new("target").join(env::var("PROFILE").unwrap()));
+
+    let output_file = output_directory.join("ya-runtime-wasi.json");
     serde_json::to_writer_pretty(
         fs::OpenOptions::new()
             .create(true)
             .truncate(true)
             .write(true)
-            .open(output_directory.join("ya-runtime-wasi.json"))?,
+            .open(&output_file)
+            .with_context(|| format!("writing descriptor to {}", output_file.display()))?,
         &descriptors,
     )?;
 
