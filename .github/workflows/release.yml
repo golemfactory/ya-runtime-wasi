@@ -36,6 +36,9 @@ jobs:
           - macos
     steps:
       - uses: actions/checkout@v1
+        with:
+          lfs: true
+
       - name: Musl
         if: matrix.os == 'ubuntu'
         run: |
