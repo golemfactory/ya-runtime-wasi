@@ -1,0 +1,18 @@
+[build]
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.x86_64-pc-windows-gnu]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[cargo-new]
+name = "Golem Factory"
+email = "contact@golem.network"
+
+[profile.release]
+lto="fat"
+opt-level=3
+codegen-units=1
+
+
