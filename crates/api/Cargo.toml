@@ -19,7 +19,7 @@ wasmtime-wasi = "0.20"
 wasi-common = "0.20"
 libc = "0.2"
 uuid = { version = "0.8", features = ["serde", "v4"] }
-ya-runtime-api = { version = "0.1", git = "https://github.com/golemfactory/yagna.git", features=["codec"] }
+ya-runtime-api = { version = "0.1", features=["codec"] }
 zip="0.5"
 
 [dependencies.wasmtime]
@@ -37,4 +37,3 @@ zip="0.5"
 [features]
 integration-tests = []
 sgx=[]
-
