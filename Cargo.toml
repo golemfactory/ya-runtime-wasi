@@ -57,3 +57,6 @@ sgx=["ya-runtime-wasi/sgx", "log/release_max_level_error"]
 wasi=["ya-runtime-wasi"]
 aswasm=["ya-runtime-aswasm", "log/release_max_level_error"]
 integration-tests=['ya-runtime-wasi/integration-tests']
+
+[patch.crates-io]
+ya-runtime-api =  { git = "https://github.com/golemfactory/yagna.git", rev = "38d6d5b914c74985c6901d9161bc87f759ca7a6e" }
