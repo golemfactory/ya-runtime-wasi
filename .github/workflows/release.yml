@@ -103,7 +103,7 @@ jobs:
           TARGET_DIR=releases/ya-runtime-wasi-${OS_NAME}-${TAG_NAME}
 
           mkdir -p "$TARGET_DIR"
-          cp conf/ya-runtime-wasi.json "$TARGET_DIR/"
+          cp target/release/ya-runtime-wasi.json "$TARGET_DIR/"
           if [ "$OS_NAME" = "windows" ]; then
               cp target/release/ya-runtime-wasi.exe "$TARGET_DIR/"
               strip "$TARGET_DIR/ya-runtime-wasi.exe"
