@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::Deserialize;
 use serde_json;
 use std::fs::OpenOptions;
@@ -67,25 +67,52 @@ enum Commands {
         entrypoint: String,
         args: Vec<String>,
     },
+    Test {},
 }
 
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 struct CmdArgs {
-    #[structopt(short, long)]
-    workdir: PathBuf,
-    #[structopt(short, long)]
-    task_package: PathBuf,
+    #[structopt(short, long, required_ifs(
+        &[
+            ("command", "deploy"),
+            ("command", "start"),
+            ("command", "run")
+        ])
+    )]
+    workdir: Option<PathBuf>,
+    #[structopt(short, long, required_ifs(
+        &[
+            ("command", "deploy"),
+            ("command", "start"),
+            ("command", "run")
+        ])
+    )]
+    task_package: Option<PathBuf>,
     #[structopt(long)]
     debug: bool,
     #[structopt(subcommand)]
     command: Commands,
 }
 
+impl CmdArgs {
+    fn workdir(&self) -> anyhow::Result<PathBuf> {
+        self.workdir.clone().context("No workdir arg")
+    }
+
+    fn task_package(&self) -> anyhow::Result<PathBuf> {
+        self.task_package.clone().context("No task_package arg")
+    }
+}
+
 fn main() -> Result<()> {
     let cmdline = CmdArgs::from_args();
 
-    env_logger::from_env("YA_WASI_LOG")
+    if let Commands::Test {} = cmdline.command {
+        return Ok(());
+    }
+
+    env_logger::Builder::from_env("YA_WASI_LOG")
         .filter(Some("cranelift_codegen"), log::LevelFilter::Error)
         .filter(Some("cranelift_wasm"), log::LevelFilter::Error)
         .filter(
@@ -98,15 +125,18 @@ fn main() -> Result<()> {
         )
         .init();
 
-    let runtime = detect_runtime(&cmdline.task_package)?;
+    let runtime = detect_runtime(&cmdline.task_package()?)?;
 
     match cmdline.command {
         #[allow(unused_variables)]
-        Commands::Run { entrypoint, args } => match runtime {
+        Commands::Run {
+            ref entrypoint,
+            ref args,
+        } => match runtime {
             RuntimeType::WASI => with_wasi!(wasi::RuntimeOptions::from_env()?.run(
-                &cmdline.workdir,
-                &entrypoint,
-                args
+                cmdline.workdir()?,
+                entrypoint,
+                args.clone()
             )),
             RuntimeType::ASWASM => {
                 anyhow::bail!("aswasm is blocking engine, run op is not supported.")
@@ -115,10 +145,10 @@ fn main() -> Result<()> {
         Commands::Deploy {} => {
             let res = match runtime {
                 RuntimeType::WASI => {
-                    with_wasi!(wasi::deploy(&cmdline.workdir, &cmdline.task_package))
+                    with_wasi!(wasi::deploy(&cmdline.workdir()?, cmdline.task_package()?))
                 }
                 RuntimeType::ASWASM => {
-                    with_aswasm!(aswasm::deploy(&cmdline.workdir, &cmdline.task_package))
+                    with_aswasm!(aswasm::deploy(&cmdline.workdir, cmdline.task_package()?))
                 }
             }?;
             println!("{}\n", serde_json::to_string(&res)?);
@@ -126,9 +156,10 @@ fn main() -> Result<()> {
         }
         Commands::Start {} => match runtime {
             RuntimeType::WASI => {
-                with_wasi!(wasi::RuntimeOptions::from_env()?.start(&cmdline.workdir))
+                with_wasi!(wasi::RuntimeOptions::from_env()?.start(cmdline.workdir()?))
             }
-            RuntimeType::ASWASM => with_aswasm!(aswasm::start(&cmdline.workdir)),
+            RuntimeType::ASWASM => with_aswasm!(aswasm::start(cmdline.workdir()?)),
         },
+        Commands::Test {} => Ok(()),
     }
 }
