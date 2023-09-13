@@ -112,7 +112,7 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    env_logger::from_env("YA_WASI_LOG")
+    env_logger::Builder::from_env("YA_WASI_LOG")
         .filter(Some("cranelift_codegen"), log::LevelFilter::Error)
         .filter(Some("cranelift_wasm"), log::LevelFilter::Error)
         .filter(
