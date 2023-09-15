@@ -26,7 +26,7 @@ jobs:
           prerelease: true
   build:
     name: Build Release
-    runs-on: ${{ matrix.os }}-latest
+    runs-on: ${{ matrix.os }}-${{ matrix.version }}
     needs: create-rel
     strategy:
       matrix:
@@ -34,6 +34,13 @@ jobs:
           - ubuntu
           - windows
           - macos
+        include:
+          - os: ubuntu
+            version: 20.04
+          - os: windows
+            version: latest
+          - os: macos
+            version: latest
     steps:
       - uses: actions/checkout@v1
       - name: Musl
