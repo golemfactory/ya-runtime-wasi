@@ -76,7 +76,7 @@ jobs:
           toolchain: stable
           target: x86_64-unknown-linux-musl
           override: true
-      - name: Cargo Deb
+      - name: Install cargo-deb
         if: matrix.os == 'ubuntu'
         uses: actions-rs/cargo@v1
         with:
@@ -86,7 +86,7 @@ jobs:
         if: matrix.os == 'ubuntu'
         uses: actions-rs/cargo@v1
         with:
-          command: deb
+          command: deb --deb-version ${{ github.ref }}
       - name: Build
         uses: actions-rs/cargo@v1
         with:
