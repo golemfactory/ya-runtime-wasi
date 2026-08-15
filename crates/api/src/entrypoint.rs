@@ -1,51 +1,63 @@
-use crate::{deploy::DeployFile, manifest::WasmImage, wasmtime_unit::Wasmtime};
+use crate::{
+    deploy::DeployFile,
+    manifest::{MountAccess, WasmImage},
+    wasmtime_unit::Wasmtime,
+};
 
 use std::env;
 use std::path::{Component, Path, PathBuf};
 
-use anyhow::{bail, Result};
+use anyhow::{Context, Result, bail};
 use log::info;
 
 const INIT_MEM_VAR: &str = "YA_RUNTIME_WASI_INIT_MEM";
+const MAX_FUEL_VAR: &str = "YA_RUNTIME_WASI_MAX_FUEL";
 const OPTIMIZE_VAR: &str = "YA_RUNTIME_WASI_OPT";
 const SGX_VAR: &str = "YA_RUNTIME_WASI_SGX";
+const DEFAULT_MAX_MEMORY: u64 = 1 << 30;
 
 /// WASI runtime configuration.
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct RuntimeOptions {
-    pub(crate) max_static_memory: Option<u64>,
+    pub(crate) memory_reservation: Option<u64>,
+    pub(crate) max_memory: Option<u64>,
+    pub(crate) max_fuel: Option<u64>,
     pub(crate) optimize: Option<bool>,
     pub(crate) sgx_profile: Option<bool>,
+}
+
+impl Default for RuntimeOptions {
+    fn default() -> Self {
+        Self {
+            memory_reservation: Some(DEFAULT_MAX_MEMORY),
+            max_memory: Some(DEFAULT_MAX_MEMORY),
+            max_fuel: None,
+            optimize: None,
+            sgx_profile: None,
+        }
+    }
 }
 
 impl RuntimeOptions {
     /// Initializes runtime options from environment variables.
     ///
-    /// * `YA_RUNTIME_WASI_INIT_MEM` - maximum memory size. (supported formats 250m, 1.2g)
+    /// * `YA_RUNTIME_WASI_INIT_MEM` - maximum size of each guest linear memory
+    ///   (for example `250m` or `1g`; defaults to `1g`).
+    /// * `YA_RUNTIME_WASI_MAX_FUEL` - optional Wasmtime fuel limit. An unset
+    ///   value or `0` disables the limit.
     /// * `YA_RUNTIME_WASI_OPT` - optimization. (0|no for no optimalization), (1|yes)
     /// * `YA_RUNTIME_WASI_SGX` - enables sgx profiled configuration.
     ///
     pub fn from_env() -> Result<Self> {
         let mut me = Self::default();
 
-        if let Some(err_msg) = (|| {
-            let mem_str = env::var(INIT_MEM_VAR).ok()?;
-            let len = mem_str.as_bytes().len();
-            let scale = match mem_str.as_bytes().get(len - 1) {
-                Some(b'k') => 0x400,
-                Some(b'm') => 0x100_000,
-                Some(b'g') => 0x40_000_000,
-                _ => return Some(format!("invalid max mem spec: {}", mem_str)),
-            };
-            let value = match mem_str[..len - 1].parse::<u64>() {
-                Ok(val) => val,
-                Err(e) => return Some(format!("invalid max mem spec: {} ({})", mem_str, e)),
-            };
-            me.max_static_memory = Some(value * scale);
-            None
-        })() {
-            log::warn!("wasi env MAX_MEM_VAR {}", err_msg);
-            return Err(anyhow::Error::msg(err_msg));
+        if let Ok(memory) = env::var(INIT_MEM_VAR) {
+            let memory = parse_memory_spec(&memory)?;
+            me.memory_reservation = Some(memory);
+            me.max_memory = Some(memory);
+        }
+        if let Ok(max_fuel) = env::var(MAX_FUEL_VAR) {
+            me.max_fuel = parse_fuel_limit(&max_fuel)?;
         }
 
         fn parse_bool(env_var: &str) -> Result<Option<bool>> {
@@ -65,11 +77,42 @@ impl RuntimeOptions {
         Ok(me)
     }
 
-    /// Configures the maximum size, in bytes, where a linear memory is
-    /// considered static, above which it'll be considered dynamic.
+    /// Configures a non-moving reservation and hard limit for each guest linear
+    /// memory, in bytes.
     ///
-    pub fn with_static_memory(mut self, max_mamory: impl Into<Option<u64>>) -> Self {
-        self.max_static_memory = max_mamory.into();
+    /// Wasmtime reserves this virtual address space when a memory is
+    /// instantiated. This does not eagerly commit the same amount of physical
+    /// RAM.
+    pub fn with_static_memory(mut self, max_memory: impl Into<Option<u64>>) -> Self {
+        let max_memory = max_memory.into();
+        self.memory_reservation = max_memory;
+        self.max_memory = max_memory;
+        self
+    }
+
+    /// Configures the maximum size of each guest linear memory, in bytes, and
+    /// aligns its non-moving reservation to the same value.
+    pub fn with_memory_limit(mut self, max_memory: impl Into<Option<u64>>) -> Self {
+        let max_memory = max_memory.into();
+        self.memory_reservation = max_memory;
+        self.max_memory = max_memory;
+        self
+    }
+
+    /// Configures non-moving virtual address space reserved for each guest
+    /// linear memory when the instance starts.
+    pub fn with_memory_reservation(mut self, memory_reservation: impl Into<Option<u64>>) -> Self {
+        self.memory_reservation = memory_reservation.into();
+        self
+    }
+
+    /// Configures an optional Wasmtime fuel limit for each invocation.
+    ///
+    /// Fuel measures guest computation rather than wall-clock time. `None`
+    /// disables fuel accounting, which is the default and is suitable for
+    /// workloads billed by actual execution time.
+    pub fn with_fuel_limit(mut self, max_fuel: impl Into<Option<u64>>) -> Self {
+        self.max_fuel = max_fuel.into().filter(|fuel| *fuel > 0);
         self
     }
 
@@ -89,10 +132,6 @@ impl RuntimeOptions {
         self
     }
 
-    pub(crate) fn is_default(&self) -> bool {
-        self.max_static_memory.is_none() && self.optimize.is_none() && self.sgx_profile.is_none()
-    }
-
     /// Instantiates and executes the deployed image using Wasmtime runtime.
     pub fn run(
         self,
@@ -103,15 +142,13 @@ impl RuntimeOptions {
         let workdir = workdir.as_ref();
         let deploy_file = DeployFile::load(workdir)?;
 
-        let mut image = WasmImage::new(&deploy_file.image_path())?;
+        let mut image = WasmImage::new(deploy_file.image_path())?;
         let mut wasmtime = create_wasmtime(workdir, &deploy_file, self)?;
 
         info!(
             "Running image: {:?}",
             get_log_path(workdir, deploy_file.image_path())
         );
-        info!("Running image: {}", deploy_file.image_path().display());
-
         // Since wasmtime object doesn't live across binary executions,
         // we must deploy image for the second time, what will load binary to wasmtime.
         let entrypoint = image.find_entrypoint(entrypoint.as_ref())?;
@@ -133,15 +170,42 @@ impl RuntimeOptions {
             get_log_path(workdir, deploy_file.image_path())
         );
 
-        let mut image = WasmImage::new(&deploy_file.image_path())?;
+        let mut image = WasmImage::new(deploy_file.image_path())?;
         let mut wasmtime = create_wasmtime(workdir, &deploy_file, self)?;
 
         wasmtime.load_binaries(&mut image)?;
+        wasmtime.validate_binaries()?;
 
         info!("Validation completed.");
 
         Ok(())
     }
+}
+
+fn parse_memory_spec(spec: &str) -> Result<u64> {
+    let suffix_index = spec
+        .len()
+        .checked_sub(1)
+        .ok_or_else(|| anyhow::anyhow!("invalid max mem spec: value is empty"))?;
+    let (value, suffix) = spec.split_at(suffix_index);
+    let scale = match suffix {
+        "k" | "K" => 1_u64 << 10,
+        "m" | "M" => 1_u64 << 20,
+        "g" | "G" => 1_u64 << 30,
+        _ => anyhow::bail!("invalid max mem spec: {spec}"),
+    };
+    value
+        .parse::<u64>()
+        .with_context(|| format!("invalid max mem spec: {spec}"))?
+        .checked_mul(scale)
+        .ok_or_else(|| anyhow::anyhow!("max mem spec overflows: {spec}"))
+}
+
+fn parse_fuel_limit(spec: &str) -> Result<Option<u64>> {
+    let fuel = spec
+        .parse::<u64>()
+        .with_context(|| format!("invalid fuel limit: {spec}"))?;
+    Ok((fuel > 0).then_some(fuel))
 }
 
 /// Validates the deployed image.
@@ -181,6 +245,7 @@ pub fn run(
 pub(crate) struct DirectoryMount {
     pub host: PathBuf,
     pub guest: PathBuf,
+    pub access: MountAccess,
 }
 
 fn create_wasmtime(
@@ -189,15 +254,19 @@ fn create_wasmtime(
     options: RuntimeOptions,
 ) -> Result<Wasmtime> {
     let mounts = deploy
-        .container_vols()
-        .map(|v| {
+        .mounts()
+        .map(|(access, v)| {
             let host = workdir.join(&v.name);
             let guest = PathBuf::from(&v.path);
             validate_mount_path(&guest)?;
-            Ok(DirectoryMount { host, guest })
+            Ok(DirectoryMount {
+                host,
+                guest,
+                access,
+            })
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
-    Ok(Wasmtime::new(mounts, options))
+    Wasmtime::new(mounts, options)
 }
 
 fn validate_mount_path(path: &Path) -> Result<()> {
@@ -224,7 +293,7 @@ fn get_log_path<'a>(workdir: &'a Path, path: &'a Path) -> &'a Path {
     path.strip_prefix(workdir)
         .ok()
         // use the file name if paths do not share a common prefix
-        .or_else(|| path.file_name().map(|file_name| Path::new(file_name)))
+        .or_else(|| path.file_name().map(Path::new))
         // in an unlikely situation return an empty path
         .unwrap_or_else(|| Path::new(""))
 }
@@ -235,29 +304,23 @@ mod tests {
 
     #[test]
     fn test_mount_path_validation() {
-        assert_eq!(
-            validate_mount_path(&PathBuf::from("path/path/path")).is_err(),
-            false
-        );
-        assert_eq!(
-            validate_mount_path(&PathBuf::from("path/../path")).is_err(),
-            true
-        );
-        assert_eq!(
-            validate_mount_path(&PathBuf::from("./path/../path")).is_err(),
-            true
-        );
-        assert_eq!(
-            validate_mount_path(&PathBuf::from("./path/path")).is_err(),
-            true
-        );
+        assert!(validate_mount_path(&PathBuf::from("path/path/path")).is_ok());
+        assert!(validate_mount_path(&PathBuf::from("path/../path")).is_err());
+        assert!(validate_mount_path(&PathBuf::from("./path/../path")).is_err());
+        assert!(validate_mount_path(&PathBuf::from("./path/path")).is_err());
     }
 
     #[test]
-    fn test_options() {
-        env::set_var(INIT_MEM_VAR, "250m");
-        let options = RuntimeOptions::from_env().unwrap();
-
-        assert_eq!(options.max_static_memory, Some(250 * 0x100_000));
+    fn test_memory_spec() {
+        assert_eq!(parse_memory_spec("250m").unwrap(), 250 * (1 << 20));
+        assert_eq!(parse_memory_spec("1G").unwrap(), 1 << 30);
+        assert!(parse_memory_spec("").is_err());
+        assert!(parse_memory_spec("1.2g").is_err());
+        assert_eq!(RuntimeOptions::default().max_memory, Some(1 << 30));
+        assert_eq!(RuntimeOptions::default().memory_reservation, Some(1 << 30));
+        assert_eq!(RuntimeOptions::default().max_fuel, None);
+        assert_eq!(parse_fuel_limit("0").unwrap(), None);
+        assert_eq!(parse_fuel_limit("100000").unwrap(), Some(100_000));
+        assert!(parse_fuel_limit("1m").is_err());
     }
 }

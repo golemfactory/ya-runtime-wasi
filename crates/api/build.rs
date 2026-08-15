@@ -5,12 +5,12 @@ fn main() {
 
 #[cfg(feature = "integration-tests")]
 mod integration_tests {
-    use anyhow::{anyhow, Result};
+    use anyhow::{Result, anyhow};
     use std::io::{Cursor, Write};
     use std::path::{Path, PathBuf};
     use std::process::{Command, Stdio};
     use std::{env, fs};
-    use zip::{write::FileOptions, CompressionMethod, ZipWriter};
+    use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
     pub(super) fn build_packages() {
         let out_dir = PathBuf::from(
@@ -30,10 +30,10 @@ mod integration_tests {
 
     fn build_package(pkg_path: &Path, out_dir: &Path) -> Result<()> {
         let mut cmd = Command::new("cargo");
-        cmd.args(&[
+        cmd.args([
             "build",
             "--release",
-            "--target=wasm32-wasi",
+            "--target=wasm32-wasip1",
             "--target-dir",
             out_dir.to_str().unwrap(),
         ])
@@ -58,13 +58,13 @@ mod integration_tests {
         let manifest = fs::read(pkg_path.join("manifest.json"))?;
         let wasm_binary = fs::read(
             out_dir
-                .join("wasm32-wasi/release")
+                .join("wasm32-wasip1/release")
                 .join(format!("{}.wasm", pkg_name)),
         )?;
 
         let w = Cursor::new(Vec::new());
         let mut zip = ZipWriter::new(w);
-        let options = FileOptions::default().compression_method(CompressionMethod::Stored);
+        let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
         zip.start_file("manifest.json", options)?;
         zip.write_all(&manifest)?;
         zip.start_file(format!("{}.wasm", pkg_name), options)?;

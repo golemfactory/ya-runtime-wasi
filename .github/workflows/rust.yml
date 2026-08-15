@@ -9,6 +9,9 @@ on:
       - master
       - v[0-9]*
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build
@@ -21,44 +24,20 @@ jobs:
           - macos
           - windows
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v6
       with:
         lfs: true
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
+    - name: Install Rust 1.97
+      shell: bash
+      run: |
+        rustup toolchain install 1.97.0 --profile minimal --component rustfmt,clippy --target wasm32-wasip1
+        rustup default 1.97.0
     - name: Cargo fmt
-      uses: actions-rs/cargo@v1
-      with:
-        command: fmt
-        args: --all -- --check
-    - name: Cache
-      uses: actions/cache@v2
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: os-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      run: cargo fmt --all -- --check
     - name: Cargo build
-      uses: actions-rs/cargo@v1
-      with:
-        command: build
-        args: --all
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        target: wasm32-wasi
+      run: cargo build --workspace --all-targets
     - name: Cargo test
-      uses: actions-rs/cargo@v1
-      with:
-        command: test
-        args: --all --features integration-tests
-    - run: rustup component add clippy
+      run: cargo test --workspace --all-targets --features integration-tests
+    - name: Cargo clippy
       if: matrix.os == 'linux'
-    - uses: actions-rs/clippy-check@v1
-      if: matrix.os == 'linux'
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        args: --all --all-features
-
+      run: cargo clippy --workspace --all-targets --all-features -- -D warnings

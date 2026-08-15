@@ -10,7 +10,7 @@
 //! ```toml
 //! # Cargo.toml
 //! [dependencies]
-//! ya-runtime-wasi = "0.2"
+//! ya-runtime-wasi = "0.3"
 //! ```
 //!
 //! You can now embed the runtime in your app like so
@@ -67,5 +67,5 @@ mod entrypoint;
 mod manifest;
 mod wasmtime_unit;
 
-pub use deploy::{deploy, DeployFile};
-pub use entrypoint::{run, start, RuntimeOptions};
+pub use deploy::{DeployFile, deploy};
+pub use entrypoint::{RuntimeOptions, run, start};

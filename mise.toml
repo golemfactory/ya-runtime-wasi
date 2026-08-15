@@ -1,0 +1,8 @@
+[tools]
+node = "22.13.0"
+python = "3.10"
+"npm:@openai/codex-security" = "latest"
+
+[tasks.security-scan]
+description = "Scan this repository with Codex Security"
+run = "codex-security scan ."

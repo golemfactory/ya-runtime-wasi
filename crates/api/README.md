@@ -18,7 +18,7 @@ The usage is pretty straightforward. In your `Cargo.toml`, put `ya-runtime-wasi`
 ```toml
 # Cargo.toml
 [dependencies]
-ya-runtime-wasi = "0.2"
+ya-runtime-wasi = "0.3"
 ```
 
 You can now embed the runtime in your app like so

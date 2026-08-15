@@ -1,4 +1,4 @@
-use crate::manifest::{MountPoint, WasmImage};
+use crate::manifest::{MountAccess, MountPoint, WasmImage};
 
 use std::{
     borrow::Cow,
@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use uuid::Uuid;
 use ya_runtime_api::deploy;
 use ya_runtime_api::deploy::ContainerVolume;
@@ -37,20 +37,54 @@ use ya_runtime_api::deploy::ContainerVolume;
 #[derive(Serialize, Deserialize)]
 pub struct DeployFile {
     image_path: PathBuf,
-    vols: Vec<(bool, deploy::ContainerVolume)>,
+    #[serde(deserialize_with = "deserialize_vols")]
+    vols: Vec<VolumeMount>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct VolumeMount {
+    #[serde(default)]
+    access: MountAccess,
+    private: bool,
+    volume: deploy::ContainerVolume,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum VolumeMountWire {
+    Current(VolumeMount),
+    Legacy((bool, deploy::ContainerVolume)),
+}
+
+fn deserialize_vols<'de, D>(deserializer: D) -> std::result::Result<Vec<VolumeMount>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Vec::<VolumeMountWire>::deserialize(deserializer).map(|mounts| {
+        mounts
+            .into_iter()
+            .map(|mount| match mount {
+                VolumeMountWire::Current(mount) => mount,
+                VolumeMountWire::Legacy((private, volume)) => VolumeMount {
+                    access: MountAccess::ReadWrite,
+                    private,
+                    volume,
+                },
+            })
+            .collect()
+    })
 }
 
 impl DeployFile {
     fn for_image(image: &WasmImage) -> Result<Self> {
         let image_path = image.path().to_owned();
-        let convert = |mount_point| {
-            (
-                MountPoint::is_private(mount_point),
-                deploy::ContainerVolume {
-                    name: format!("vol-{}", Uuid::new_v4()),
-                    path: absolute_path(mount_point.path()).into(),
-                },
-            )
+        let convert = |mount_point| VolumeMount {
+            access: MountPoint::access(mount_point),
+            private: MountPoint::is_private(mount_point),
+            volume: deploy::ContainerVolume {
+                name: format!("vol-{}", Uuid::new_v4()),
+                path: absolute_path(mount_point.path()).into(),
+            },
         };
 
         let vols = image.manifest.mount_points.iter().map(convert).collect();
@@ -82,8 +116,8 @@ impl DeployFile {
 
     pub(crate) fn create_dirs(&self, work_dir: impl AsRef<Path>) -> Result<()> {
         let work_dir = work_dir.as_ref();
-        for (_, vol) in &self.vols {
-            fs::create_dir(work_dir.join(&vol.name))?;
+        for mount in &self.vols {
+            fs::create_dir(work_dir.join(&mount.volume.name))?;
         }
         Ok(())
     }
@@ -103,16 +137,20 @@ impl DeployFile {
     pub fn public_vols<'a>(&'a self) -> impl Iterator<Item = deploy::ContainerVolume> + 'a {
         self.vols
             .iter()
-            .filter(|(prv, _)| !prv)
-            .map(|(_, v)| ContainerVolume {
-                name: v.name.clone(),
-                path: v.path.clone(),
+            .filter(|mount| !mount.private)
+            .map(|mount| ContainerVolume {
+                name: mount.volume.name.clone(),
+                path: mount.volume.path.clone(),
             })
     }
 
     /// Returns an iterator over mapped container volumes.
     pub fn container_vols(&self) -> impl Iterator<Item = &deploy::ContainerVolume> {
-        self.vols.iter().map(|(_, v)| v)
+        self.vols.iter().map(|mount| &mount.volume)
+    }
+
+    pub(crate) fn mounts(&self) -> impl Iterator<Item = (MountAccess, &deploy::ContainerVolume)> {
+        self.vols.iter().map(|mount| (mount.access, &mount.volume))
     }
 }
 
@@ -144,7 +182,7 @@ pub fn deploy(workdir: impl AsRef<Path>, path: impl AsRef<Path>) -> Result<deplo
     let workdir = workdir.as_ref();
     let path = path.as_ref();
 
-    let image = WasmImage::new(&path)
+    let image = WasmImage::new(path)
         .with_context(|| format!("Can't read image file {}.", path.display()))?;
     let deploy_file = DeployFile::for_image(&image)?;
     deploy_file.save(workdir)?;
@@ -157,4 +195,29 @@ pub fn deploy(workdir: impl AsRef<Path>, path: impl AsRef<Path>) -> Result<deplo
     };
 
     Ok(res)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn legacy_deployment_defaults_to_read_write_access() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            deploy_path(dir.path()),
+            r#"{
+                "image_path":"package.zip",
+                "vols":[[false,{"name":"vol-1","path":"/input"}]]
+            }"#,
+        )
+        .unwrap();
+
+        let deployment = DeployFile::load(dir.path()).unwrap();
+        let mounts = deployment.mounts().collect::<Vec<_>>();
+        assert_eq!(mounts.len(), 1);
+        assert_eq!(mounts[0].0, MountAccess::ReadWrite);
+        assert_eq!(mounts[0].1.name, "vol-1");
+    }
 }

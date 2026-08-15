@@ -1,6 +1,7 @@
 {
     "id": "rust-wasi-tutorial",
     "name": "rust-wasi-tutorial",
+    "runtime": "wasi",
     "entry-points": [
         {
             "id": "rust-wasi-tutorial",
@@ -8,7 +9,7 @@
         }
     ],
     "mount-points": [
-        { "rw": "input" },
+        { "ro": "input" },
         { "rw": "output" }
     ]
 }

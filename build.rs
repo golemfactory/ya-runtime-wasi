@@ -1,4 +1,4 @@
-use anyhow::*;
+use anyhow::{Context, Result};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
@@ -15,8 +15,8 @@ fn setup() {
 #[cfg(not(windows))]
 fn setup() {}
 
-fn update_descriptor() -> anyhow::Result<()> {
-    println!("cargo:rerun-if-changed=conf/{}", DESCRIPTOR_PATH);
+fn update_descriptor() -> Result<()> {
+    println!("cargo:rerun-if-changed={DESCRIPTOR_PATH}");
     let target_os = env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS");
     let exe_extension = if target_os == "windows" { ".exe" } else { "" };
 
@@ -33,10 +33,10 @@ fn update_descriptor() -> anyhow::Result<()> {
             //obj.insert("name".into(), env::var("CARGO_PKG_NAME")?.into());
             let runtime_path = obj
                 .get("runtime-path")
-                .and_then(|path| Some(format!("{}{}", path.as_str()?, exe_extension)));
+                .and_then(|path| path.as_str().map(|path| format!("{path}{exe_extension}")));
             let supervisor_path = obj
                 .get("supervisor-path")
-                .and_then(|path| Some(format!("{}{}", path.as_str()?, exe_extension)));
+                .and_then(|path| path.as_str().map(|path| format!("{path}{exe_extension}")));
             if let Some(runtime_path) = runtime_path {
                 obj.insert("runtime-path".into(), runtime_path.into());
             }
