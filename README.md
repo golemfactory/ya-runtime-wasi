@@ -12,21 +12,24 @@ engine; legacy `aswasm` packages are rejected.
 
 ## Building
 
-The project uses Rust 1.97 and edition 2024. The pinned `rust-toolchain.toml` installs the
-toolchain through `rustup` automatically.
+The project uses Rust 1.97 and edition 2024. Install the pinned Rust toolchain, WASI target,
+`protoc`, and workflow validator through [`mise`]:
 
 ```sh
-cargo build
+mise install rust protoc actionlint shellcheck
+mise run ci:build
 ```
+
+[`mise`]: https://mise.jdx.dev/
 
 If you decide to make some tweaks to the [API] and would like to test if everything still behaves
 as expected, you can trigger included end-to-end integration tests. Make sure you have
-`wasm32-wasip1` target installed (`rustup target add wasm32-wasip1 --toolchain 1.97.0`) and then run:
+the tools from `mise.toml` installed and then run:
 
 [API]: crates/api
 
 ```
-cargo test --workspace --all-targets --features integration-tests
+mise run ci:test
 ```
 
 The runtime detects the binary format automatically: core modules use WASI Preview 1 and

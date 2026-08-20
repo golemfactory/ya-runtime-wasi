@@ -1,7 +1,54 @@
 [tools]
+actionlint = "1.7.7"
+"cargo:cargo-deb" = "3.7.0"
 node = "22.13.0"
+protoc = "24.4"
 python = "3.10"
+rust = { version = "1.97.0", components = ["rustfmt", "clippy"], profile = "minimal", targets = ["wasm32-wasip1"] }
+shellcheck = "0.11.0"
 "npm:@openai/codex-security" = "latest"
+
+[env]
+PROTOC = { value = "{% if tools.protoc is defined %}{{ tools.protoc.path }}/bin/protoc{% if os() == 'windows' %}.exe{% endif %}{% endif %}", tools = true }
+
+[settings.task]
+run_auto_install = false
+
+[tasks."ci:workflows"]
+description = "Validate GitHub Actions workflows"
+run = "actionlint"
+
+[tasks."ci:lock"]
+description = "Check that Cargo.lock is sufficient"
+run = "cargo tree --locked"
+
+[tasks."ci:fmt"]
+description = "Check Rust formatting"
+run = "cargo fmt --all -- --check"
+
+[tasks."ci:build"]
+description = "Build all workspace targets"
+run = "cargo build --workspace --all-targets --locked"
+
+[tasks."ci:test"]
+description = "Run the complete workspace test suite"
+run = "cargo test --workspace --all-targets --features integration-tests --locked"
+
+[tasks."ci:clippy"]
+description = "Run workspace Clippy with CI settings"
+run = "cargo clippy --workspace --all-targets --all-features --locked -- -D warnings"
+
+[tasks."ci:release"]
+description = "Build release binaries"
+run = "cargo build --release --locked"
+
+[tasks."release:deb"]
+description = "Build the Debian package"
+run = "cargo deb"
+
+[tasks."ci:gate"]
+description = "Run the complete local release gate"
+run = "mise run ci:workflows && mise run ci:lock && mise run ci:fmt && mise run ci:build && mise run ci:test && mise run ci:clippy && mise run ci:release"
 
 [tasks.security-scan]
 description = "Scan this repository with Codex Security"

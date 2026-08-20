@@ -11,9 +11,9 @@ jobs:
           - macos
           - windows
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v6
       - name: Cache
-        uses: actions/cache@v2
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -25,4 +25,3 @@ jobs:
         run: |
           rm -fr target
           mkdir target
-
