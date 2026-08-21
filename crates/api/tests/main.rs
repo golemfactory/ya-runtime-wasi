@@ -5,8 +5,8 @@ use std::mem::ManuallyDrop;
 use std::path::{Path, PathBuf};
 use std::sync::Once;
 use std::{env, fs};
-use tempfile::{tempdir, TempDir};
-use ya_runtime_wasi::{deploy, run, start, DeployFile};
+use tempfile::{TempDir, tempdir};
+use ya_runtime_wasi::{DeployFile, deploy, run, start};
 
 static LOG_INIT: Once = Once::new();
 

@@ -2,7 +2,11 @@
 name = "rust-wasi-tutorial"
 version = "0.1.0"
 authors = ["Golem Factory <contact@golem.network>"]
-edition = "2018"
+edition = "2024"
+rust-version = "1.97"
 
 
 [dependencies]
+
+[workspace]
+resolver = "3"

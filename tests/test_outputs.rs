@@ -17,7 +17,7 @@ fn exe_runtime(
     let output = process::Command::new(app)
         .stderr(process::Stdio::piped())
         .stdout(process::Stdio::piped())
-        .args(&["--task-package", package])
+        .args(["--task-package", package])
         .arg("--workdir")
         .arg(work_dir)
         .arg(command)
@@ -49,7 +49,7 @@ fn test_outputs() -> anyhow::Result<()> {
         package,
         dir.path(),
         "run",
-        &[
+        [
             "-e",
             "trusted-voting-mgr",
             "--",
@@ -68,7 +68,7 @@ fn test_outputs() -> anyhow::Result<()> {
         package,
         dir.path(),
         "run",
-        &["-e", "trusted-voting-mgr", "--", "debug"],
+        ["-e", "trusted-voting-mgr", "--", "debug"],
     )?;
     assert_eq!(
         output.stderr.len(),
