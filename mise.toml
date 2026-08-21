@@ -1,5 +1,6 @@
 [tools]
 actionlint = "1.7.7"
+"cargo:cross" = "0.2.5"
 "cargo:cargo-deb" = "3.7.0"
 node = "22.13.0"
 protoc = "24.4"
@@ -41,6 +42,14 @@ run = "cargo clippy --workspace --all-targets --all-features --locked -- -D warn
 [tasks."ci:release"]
 description = "Build release binaries"
 run = "cargo build --release --locked"
+
+[tasks."ci:release-linux-x86_64"]
+description = "Build the x86_64 Linux release binary with musl"
+run = "cargo build --release --locked --target x86_64-unknown-linux-musl"
+
+[tasks."ci:release-linux-aarch64"]
+description = "Cross-build the AArch64 Linux release binary with musl"
+run = "cross build --release --locked --target aarch64-unknown-linux-musl"
 
 [tasks."release:deb"]
 description = "Build the Debian package"
