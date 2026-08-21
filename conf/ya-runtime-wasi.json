@@ -4,6 +4,6 @@
     "supervisor-path": "exe-unit",
     "runtime-path": "ya-runtime-wasi",
     "description": "wasmtime wasi runtime",
-    "version": "0.4.0"
+    "version": "0.4.1"
   }
 ]

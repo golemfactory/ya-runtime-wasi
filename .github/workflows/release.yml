@@ -26,30 +26,56 @@ jobs:
           gh release create "$GITHUB_REF_NAME" "${release_flags[@]}"
   build:
     name: Build Release
-    runs-on: ${{ matrix.os }}-latest
+    runs-on: ${{ matrix.image }}
     needs: create-rel
     strategy:
+      fail-fast: false
       matrix:
-        os:
-          - ubuntu
-          - windows
-          - macos
+        include:
+          - os: ubuntu
+            image: ubuntu-22.04
+          - os: windows
+            image: windows-latest
+          - os: macos
+            image: macos-latest
     steps:
       - uses: actions/checkout@v6
         with:
           lfs: true
+      - name: Install musl tools
+        if: matrix.os == 'ubuntu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes musl musl-tools
+          musl-gcc -v
       - name: Install tools
         uses: jdx/mise-action@v4
         with:
           version: 2026.7.5
           install_args: "rust protoc"
-      - name: Cargo Deb
+      - name: Install Linux target
         if: matrix.os == 'ubuntu'
-        run: mise install cargo:cargo-deb
-      - name: Build Deb
+        run: rustup target add x86_64-unknown-linux-musl
+      - name: Build Linux
         if: matrix.os == 'ubuntu'
-        run: mise run release:deb
-      - name: Build
+        run: mise run ci:release-linux-x86_64
+      - name: Verify Linux linkage
+        if: matrix.os == 'ubuntu'
+        shell: bash
+        run: |
+          binary=target/x86_64-unknown-linux-musl/release/ya-runtime-wasi
+          file "$binary"
+          ldd "$binary" || true
+          if readelf -l "$binary" | grep -Eq '/lib64/ld-linux|/lib/x86_64-linux-gnu'; then
+            echo "::error::Linux release uses the glibc program interpreter"
+            exit 1
+          fi
+          if readelf -d "$binary" | grep -Eq 'libc\.so\.6|libgcc_s\.so\.1'; then
+            echo "::error::Linux release has a dynamic glibc dependency"
+            exit 1
+          fi
+      - name: Build macOS and Windows
+        if: matrix.os != 'ubuntu'
         run: mise run ci:release
       - name: Pack
         id: pack
@@ -61,21 +87,22 @@ jobs:
           TAG_NAME="${GITHUB_REF##*/}"
           if [ "$OS_NAME" = "ubuntu" ]; then
             OS_NAME=linux
-            deb_files=(target/debian/*.deb)
-            deb_name=${deb_files[0]##*/}
-            echo "deb=$deb_name" >> "$GITHUB_OUTPUT"
+            BUILD_DIR=target/x86_64-unknown-linux-musl/release
           elif [ "$OS_NAME" == "macos" ]; then
             OS_NAME=osx
+            BUILD_DIR=target/release
+          else
+            BUILD_DIR=target/release
           fi
           TARGET_DIR=releases/ya-runtime-wasi-${OS_NAME}-${TAG_NAME}
 
           mkdir -p "$TARGET_DIR"
-          cp target/release/ya-runtime-wasi.json "$TARGET_DIR/"
+          cp "$BUILD_DIR/ya-runtime-wasi.json" "$TARGET_DIR/"
           if [ "$OS_NAME" = "windows" ]; then
-              cp target/release/ya-runtime-wasi.exe "$TARGET_DIR/"
+              cp "$BUILD_DIR/ya-runtime-wasi.exe" "$TARGET_DIR/"
               strip "$TARGET_DIR/ya-runtime-wasi.exe"
           else
-              cp target/release/ya-runtime-wasi "$TARGET_DIR/"
+              cp "$BUILD_DIR/ya-runtime-wasi" "$TARGET_DIR/"
               strip "$TARGET_DIR/ya-runtime-wasi"
           fi
           ls -al "$TARGET_DIR"
@@ -86,12 +113,91 @@ jobs:
               echo "artifact=ya-runtime-wasi-${OS_NAME}-${TAG_NAME}.tar.gz" >> "$GITHUB_OUTPUT"
               (cd releases && tar czvf "ya-runtime-wasi-${OS_NAME}-${TAG_NAME}.tar.gz" "ya-runtime-wasi-${OS_NAME}-${TAG_NAME}")
           fi
-      - name: Upload Deb
-        if: matrix.os == 'ubuntu'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" "./target/debian/${{ steps.pack.outputs.deb }}"
       - name: Upload Release Asset
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: gh release upload "$GITHUB_REF_NAME" "./releases/${{ steps.pack.outputs.artifact }}"
+
+  build-aarch64:
+    name: Build Release (Linux AArch64)
+    runs-on: ubuntu-latest
+    needs: create-rel
+    env:
+      RUSTFLAGS: "-C link-arg=-s"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          lfs: true
+      - name: Install tools
+        uses: jdx/mise-action@v4
+        with:
+          version: 2026.7.5
+          install_args: "rust protoc cargo:cross"
+      - name: Install Rust target
+        run: rustup target add aarch64-unknown-linux-musl
+      - name: Build Linux AArch64
+        run: mise run ci:release-linux-aarch64
+      - name: Verify Linux linkage
+        shell: bash
+        run: |
+          binary=target/aarch64-unknown-linux-musl/release/ya-runtime-wasi
+          file "$binary"
+          if readelf -l "$binary" | grep -Eq 'ld-linux|/lib/aarch64-linux-gnu'; then
+            echo "::error::Linux AArch64 release uses the glibc program interpreter"
+            exit 1
+          fi
+          if readelf -d "$binary" | grep -Eq 'libc\.so\.6|libgcc_s\.so\.1'; then
+            echo "::error::Linux AArch64 release has a dynamic glibc dependency"
+            exit 1
+          fi
+      - name: Pack
+        id: pack
+        shell: bash
+        env:
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          TAG_NAME="${GITHUB_REF##*/}"
+          BUILD_DIR=target/aarch64-unknown-linux-musl/release
+          TARGET_DIR=releases/ya-runtime-wasi-linux-aarch64-${TAG_NAME}
+          ARTIFACT=ya-runtime-wasi-linux-aarch64-${TAG_NAME}.tar.gz
+
+          mkdir -p "$TARGET_DIR"
+          cp "$BUILD_DIR/ya-runtime-wasi" "$BUILD_DIR/ya-runtime-wasi.json" "$TARGET_DIR/"
+          echo "artifact=$ARTIFACT" >> "$GITHUB_OUTPUT"
+          (cd releases && tar czvf "$ARTIFACT" "ya-runtime-wasi-linux-aarch64-${TAG_NAME}")
+      - name: Upload Release Asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh release upload "$GITHUB_REF_NAME" "./releases/${{ steps.pack.outputs.artifact }}"
+
+  build-deb:
+    name: Build Debian package
+    runs-on: ubuntu-latest
+    needs: create-rel
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          lfs: true
+      - name: Install tools
+        uses: jdx/mise-action@v4
+        with:
+          version: 2026.7.5
+          install_args: "rust protoc cargo:cargo-deb"
+      - name: Build Debian package
+        id: deb
+        shell: bash
+        run: |
+          mise run release:deb
+          deb_files=(target/debian/*.deb)
+          if (( ${#deb_files[@]} != 1 )); then
+            echo "::error::Expected exactly one Debian package"
+            exit 1
+          fi
+          echo "file=${deb_files[0]}" >> "$GITHUB_OUTPUT"
+      - name: Upload Debian package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh release upload "$GITHUB_REF_NAME" "${{ steps.deb.outputs.file }}"

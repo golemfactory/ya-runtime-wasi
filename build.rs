@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use serde_json::Value;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::{env, fs};
 
 const DESCRIPTOR_PATH: &str = "conf/ya-runtime-wasi.json";
@@ -50,10 +50,23 @@ fn update_descriptor() -> Result<()> {
             );
         }
     }
-    let output_directory: PathBuf = env::var("CARGO_BUILD_TARGET_DIR")
-        .ok()
-        .map(Into::into)
-        .unwrap_or_else(|| Path::new("target").join(env::var("PROFILE").unwrap()));
+    let output_directory = match env::var("CARGO_BUILD_TARGET_DIR") {
+        Ok(path) => PathBuf::from(path),
+        Err(_) => {
+            let out_directory = PathBuf::from(env::var("OUT_DIR").context("OUT_DIR is not set")?);
+            out_directory
+                .ancestors()
+                .nth(3)
+                .map(PathBuf::from)
+                .context("OUT_DIR does not contain a Cargo profile directory")?
+        }
+    };
+    fs::create_dir_all(&output_directory).with_context(|| {
+        format!(
+            "creating descriptor output directory {}",
+            output_directory.display()
+        )
+    })?;
 
     let output_file = output_directory.join("ya-runtime-wasi.json");
     serde_json::to_writer_pretty(
